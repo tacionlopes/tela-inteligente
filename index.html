@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desbloqueio Inteligente</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <div class="mobile-stage">
+        <section class="topbar" aria-label="Navegação principal">
+          <div class="brand">
+            <div class="brand-logo" aria-hidden="true">
+              <span class="cap-top"></span>
+              <span class="cap-base"></span>
+              <span class="cap-tail"></span>
+            </div>
+            <h1>Tela Inteligente</h1>
+          </div>
+          <div class="view-switch" role="tablist" aria-label="Alternar visão">
+            <button class="switch-button active" data-view="child" role="tab" aria-selected="true">
+              Aluno
+            </button>
+            <button class="switch-button" data-view="history" role="tab" aria-selected="false">
+              Histórico
+            </button>
+            <button class="switch-button" data-view="parent" role="tab" aria-selected="false">
+              Responsável
+            </button>
+          </div>
+        </section>
+
+        <section id="childView" class="view active" aria-label="Celular da criança">
+          <div class="phone-frame">
+          <div class="phone-status">
+            <span>16:42</span>
+            <span>Wi-Fi 82%</span>
+          </div>
+
+          <div class="phone-content">
+            <div class="sim-status-row" aria-hidden="true">
+              <span>🏠</span>
+              <span>📅</span>
+              <span>🌤</span>
+              <span>📷</span>
+            </div>
+            <div class="sim-home-grid" aria-hidden="true">
+              <span>Phone</span>
+              <span>Safari</span>
+              <span>Mail</span>
+              <span>Chat</span>
+              <span>Fotos</span>
+              <span>Vídeo</span>
+              <span>Jogos</span>
+              <span>Aula</span>
+            </div>
+            <div class="sim-dock" aria-hidden="true">
+              <span>📞</span>
+              <span>🌐</span>
+              <span>✉️</span>
+              <span>💬</span>
+            </div>
+            <button id="openCountdownAppButton" class="student-app-button" type="button">
+              <span class="brand-logo mini-app-logo" aria-hidden="true">
+                <span class="cap-top"></span>
+                <span class="cap-base"></span>
+                <span class="cap-tail"></span>
+              </span>
+              <span>Tela Inteligente</span>
+            </button>
+          </div>
+
+          <div id="educationGate" class="education-gate" role="dialog" aria-modal="true">
+            <div class="step-line">
+              <span aria-hidden="true">←</span>
+              <span id="questionCounter" class="counter">Etapa 1 de 5</span>
+            </div>
+
+            <div class="gate-header">
+              <div class="gate-icon" aria-hidden="true">↑</div>
+              <div>
+                <p id="gradeLabel" class="eyebrow">3º ano • 8 anos</p>
+                <h2>Desafio Escolar</h2>
+              </div>
+              <div class="score-pill"><span id="scoreLabel">0</span>/10</div>
+            </div>
+
+            <div class="progress-track" aria-label="Progresso da rodada">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+
+            <h3 id="questionText" class="question">Quanto é 4 + 4?</h3>
+
+            <div id="answerList" class="answer-list"></div>
+
+            <div id="feedback" class="feedback" aria-live="polite"></div>
+
+            <button id="nextButton" class="primary-button" disabled>Responder</button>
+          </div>
+
+          <div id="unlockedState" class="unlocked-state" hidden>
+            <div class="gate-icon" aria-hidden="true">✓</div>
+            <h2>Tela liberada</h2>
+            <p id="unlockMessage">Parabéns, você ganhou tempo para continuar usando o celular.</p>
+            <p id="unlockCountdown" class="unlock-countdown"></p>
+            <button id="closeCountdownButton" class="primary-button">Fechar tela</button>
+          </div>
+          </div>
+        </section>
+
+        <section id="parentView" class="view" aria-label="Painel dos responsáveis">
+          <div class="dashboard">
+          <div class="dashboard-header">
+            <div>
+              <p class="eyebrow">Espelho dos responsáveis</p>
+              <h2>Resultados recebidos</h2>
+            </div>
+            <button id="clearResultsButton" class="secondary-button">Limpar</button>
+          </div>
+
+          <div class="summary-grid">
+            <div class="metric">
+              <span>Última nota</span>
+              <strong id="lastScore">--</strong>
+            </div>
+            <div class="metric">
+              <span>Rodadas</span>
+              <strong id="roundCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>Melhor matéria</span>
+              <strong id="bestSubject">--</strong>
+            </div>
+          </div>
+
+          <div class="student-panel">
+            <div>
+              <h3>Ano do aluno</h3>
+              <p>As próximas rodadas usam questões deste ano.</p>
+            </div>
+            <select id="studentGradeSelect" aria-label="Ano escolar do aluno">
+              <option value="1º">1º ano</option>
+              <option value="2º">2º ano</option>
+              <option value="3º">3º ano</option>
+              <option value="4º">4º ano</option>
+              <option value="5º">5º ano</option>
+            </select>
+          </div>
+
+          <div class="student-panel">
+            <div>
+              <h3>Tempo liberado</h3>
+              <p>Duração de uso após acertar tudo.</p>
+            </div>
+            <select id="unlockTimeSelect" aria-label="Tempo de tela liberada">
+              <option value="5">5 minutos</option>
+              <option value="10">10 minutos</option>
+              <option value="15">15 minutos</option>
+              <option value="20">20 minutos</option>
+              <option value="30">30 minutos</option>
+              <option value="45">45 minutos</option>
+              <option value="60">60 minutos</option>
+            </select>
+          </div>
+
+          <div class="import-panel">
+            <div class="import-actions">
+              <label class="file-button import-button">
+                Importar questões
+                <input id="questionCsvInput" type="file" accept=".csv,text/csv" />
+              </label>
+              <button id="manualUnlockButton" class="primary-button import-button" type="button">
+                Liberar tela
+              </button>
+            </div>
+            <p id="questionBankStatus">Usando questões padrão do protótipo.</p>
+          </div>
+        </div>
+      </section>
+
+        <section id="historyView" class="view" aria-label="Histórico de resultados">
+          <div class="dashboard">
+          <div class="dashboard-header">
+            <div>
+              <p class="eyebrow">Histórico</p>
+              <h2>Rodadas respondidas</h2>
+            </div>
+            <button class="secondary-button" data-view-target="parent">Voltar</button>
+          </div>
+
+          <div class="results-panel">
+            <div id="resultsList" class="results-list"></div>
+          </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="passwordGate" class="password-gate" hidden role="dialog" aria-modal="true">
+        <form id="passwordForm" class="password-card">
+          <div class="brand-logo password-logo" aria-hidden="true">
+            <span class="cap-top"></span>
+            <span class="cap-base"></span>
+            <span class="cap-tail"></span>
+          </div>
+          <h2>Área do responsável</h2>
+          <label for="parentPasswordInput">Senha</label>
+          <input
+            id="parentPasswordInput"
+            type="password"
+            inputmode="numeric"
+            autocomplete="current-password"
+            placeholder="Digite a senha"
+          />
+          <p id="passwordError" class="password-error" aria-live="polite"></p>
+          <div class="password-actions">
+            <button type="button" id="cancelPasswordButton" class="secondary-button">Cancelar</button>
+            <button type="submit" class="primary-button">Entrar</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

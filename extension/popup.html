@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desbloqueio Sync</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Questões Google Sheets</h1>
+      <label for="sheetUrl">URL CSV publicada</label>
+      <textarea
+        id="sheetUrl"
+        rows="5"
+        placeholder="Cole a URL CSV do Google Sheets ou Apps Script"
+      ></textarea>
+      <button id="syncButton">Sincronizar com app aberto</button>
+      <p id="status">Cole a URL e deixe o app aberto no navegador.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
