@@ -113,7 +113,12 @@ let pendingProtectedView = "";
 let unlockTimerId = null;
 let unlockCountdownId = null;
 let unlockMessageTimerId = null;
+let firestoreDb = null;
+const splashDurationMs = 3000;
+const parentPasswordEnabled = false;
+const firestoreGradeCache = new Map();
 
+const splashScreen = document.querySelector("#splashScreen");
 const childView = document.querySelector("#childView");
 const parentView = document.querySelector("#parentView");
 const historyView = document.querySelector("#historyView");
@@ -141,6 +146,7 @@ const feedback = document.querySelector("#feedback");
 const nextButton = document.querySelector("#nextButton");
 const clearResultsButton = document.querySelector("#clearResultsButton");
 const manualUnlockButton = document.querySelector("#manualUnlockButton");
+const stopTestButton = document.querySelector("#stopTestButton");
 const lastScore = document.querySelector("#lastScore");
 const roundCount = document.querySelector("#roundCount");
 const bestSubject = document.querySelector("#bestSubject");
@@ -154,11 +160,90 @@ function shuffle(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
 
-function startRound() {
+function getFirestoreInstance() {
+  if (firestoreDb !== null) return firestoreDb;
+
+  const firebaseConfig = window.TELA_INTELIGENTE_FIREBASE_CONFIG;
+  if (!window.firebase || !firebaseConfig || !firebaseConfig.projectId) {
+    firestoreDb = undefined;
+    return firestoreDb;
+  }
+
+  if (!window.firebase.apps.length) {
+    window.firebase.initializeApp(firebaseConfig);
+  }
+
+  firestoreDb = window.firebase.firestore();
+  return firestoreDb;
+}
+
+function mapFirestoreQuestion(docData) {
+  const grade = normalizeGradeLabel(docData.grade || docData.year || docData.ano);
+  const options = [
+    docData.optionA || docData.a || docData.alternativaA,
+    docData.optionB || docData.b || docData.alternativaB,
+    docData.optionC || docData.c || docData.alternativaC,
+    docData.optionD || docData.d || docData.alternativaD,
+  ].filter(Boolean);
+
+  return {
+    grade,
+    age: Number(docData.age || docData.idade || inferAgeFromGrade(grade)),
+    subject: docData.subject || docData.materia || inferSubjectFromQuestion(docData.text || docData.question || docData.pergunta),
+    level: docData.level || docData.nivel || "Fácil",
+    text: docData.text || docData.question || docData.pergunta || "",
+    options,
+    correct: String(docData.correct || docData.correta || docData.gabarito || "").trim().toUpperCase(),
+  };
+}
+
+async function fetchQuestionsFromFirestore(selectedGrade) {
+  const db = getFirestoreInstance();
+  if (!db) return [];
+  if (firestoreGradeCache.has(selectedGrade)) {
+    return firestoreGradeCache.get(selectedGrade);
+  }
+
+  const snapshots = await Promise.all([
+    db.collection("questions").where("grade", "==", selectedGrade).get(),
+    db.collection("questions").where("year", "==", selectedGrade).get(),
+  ]);
+
+  const firestoreQuestions = snapshots
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((doc, index, docs) => docs.findIndex((item) => item.id === doc.id) === index)
+    .map((doc) => mapFirestoreQuestion(doc.data()))
+    .filter((question) => {
+      const validAnswers = question.options.map((_, index) => String.fromCharCode(65 + index));
+      return question.grade && question.text && question.options.length >= 3 && validAnswers.includes(question.correct);
+    });
+
+  const normalizedQuestions = ensureFourOptions(firestoreQuestions);
+  firestoreGradeCache.set(selectedGrade, normalizedQuestions);
+  return normalizedQuestions;
+}
+
+function isTestModeEnabled() {
+  return localStorage.getItem("smartUnlockTestActive") === "true";
+}
+
+function setTestModeEnabled(enabled) {
+  localStorage.setItem("smartUnlockTestActive", enabled ? "true" : "false");
+}
+
+function renderIdleStudentState() {
+  clearUnlockTimer();
+  localStorage.removeItem("smartUnlockUnlockedUntil");
+  phoneFrame.classList.add("screen-free");
+  educationGate.hidden = true;
+  unlockedState.hidden = true;
+}
+
+async function startRound() {
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
   phoneFrame.classList.remove("screen-free");
-  const eligibleQuestions = getQuestionsForSelectedGrade();
+  const eligibleQuestions = await getQuestionsForSelectedGrade();
   roundQuestions = buildDiversifiedRound(eligibleQuestions);
   currentIndex = 0;
   selectedAnswer = "";
@@ -170,11 +255,16 @@ function startRound() {
   renderQuestion();
 }
 
-function startOverlayRound() {
+async function startOverlayRound() {
+  if (!isTestModeEnabled()) {
+    renderIdleStudentState();
+    return;
+  }
+
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
   phoneFrame.classList.remove("screen-free");
-  const eligibleQuestions = getQuestionsForSelectedGrade();
+  const eligibleQuestions = await getQuestionsForSelectedGrade();
   roundQuestions = buildDiversifiedRound(eligibleQuestions);
   currentIndex = 0;
   selectedAnswer = "";
@@ -239,8 +329,13 @@ function getUnlockMinutes() {
   return Number(localStorage.getItem("smartUnlockMinutes") || "15");
 }
 
-function getQuestionsForSelectedGrade() {
+async function getQuestionsForSelectedGrade() {
   const selectedGrade = getSelectedGrade();
+  const remoteQuestions = await fetchQuestionsFromFirestore(selectedGrade);
+  if (remoteQuestions.length) {
+    return remoteQuestions;
+  }
+
   const filteredQuestions = questions.filter((question) => question.grade === selectedGrade);
   return filteredQuestions.length ? filteredQuestions : questions;
 }
@@ -288,7 +383,11 @@ function calculateScore() {
 
 function submitAnswer() {
   if (retryPending) {
-    startRound();
+    if (isTestModeEnabled()) {
+      startOverlayRound();
+    } else {
+      startRound();
+    }
     return;
   }
 
@@ -341,10 +440,14 @@ function beginUnlockPeriod() {
   unlockedState.hidden = false;
   scheduleOverlayReturn();
   startUnlockCountdown();
-  autoCloseUnlockMessage();
 }
 
 function scheduleOverlayReturn() {
+  if (!isTestModeEnabled()) {
+    renderIdleStudentState();
+    return;
+  }
+
   clearUnlockTimer();
   const unlockedUntil = Number(localStorage.getItem("smartUnlockUnlockedUntil") || "0");
   const remainingMs = unlockedUntil - Date.now();
@@ -362,6 +465,11 @@ function scheduleOverlayReturn() {
 }
 
 function restoreUnlockState() {
+  if (!isTestModeEnabled()) {
+    renderIdleStudentState();
+    return false;
+  }
+
   const unlockedUntil = Number(localStorage.getItem("smartUnlockUnlockedUntil") || "0");
   if (unlockedUntil > Date.now()) {
     phoneFrame.classList.add("screen-free");
@@ -408,17 +516,6 @@ function updateUnlockCountdown() {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   unlockCountdown.textContent = `Tempo restante: ${minutes}:${seconds}`;
-}
-
-function autoCloseUnlockMessage() {
-  if (unlockMessageTimerId) {
-    window.clearTimeout(unlockMessageTimerId);
-  }
-
-  unlockMessageTimerId = window.setTimeout(() => {
-    unlockedState.hidden = true;
-    unlockMessageTimerId = null;
-  }, 3500);
 }
 
 function saveResult(score, passed) {
@@ -480,10 +577,13 @@ function ensureFourOptions(questionList) {
 
 function renderQuestionBankStatus() {
   const imported = JSON.parse(localStorage.getItem("smartUnlockQuestions") || "null");
+  const hasFirestore = Boolean(window.TELA_INTELIGENTE_FIREBASE_CONFIG?.projectId);
   questionBankStatus.textContent =
     Array.isArray(imported) && imported.length
       ? `${imported.length} questões importadas da planilha.`
-      : "Usando questões padrão do protótipo.";
+      : hasFirestore
+        ? "Buscando questões do Firebase por ano escolar."
+        : "Usando questões padrão do protótipo.";
 }
 
 function parseCsv(text) {
@@ -528,8 +628,52 @@ function normalizeHeader(header) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeSheetName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function normalizeGradeLabel(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/([1-5])\s*(?:o|º)?/i);
+  return match ? `${match[1]}º` : text;
+}
+
+function inferAgeFromGrade(grade) {
+  const normalizedGrade = normalizeGradeLabel(grade);
+  const ageByGrade = {
+    "1º": 6,
+    "2º": 7,
+    "3º": 8,
+    "4º": 9,
+    "5º": 10,
+  };
+  return ageByGrade[normalizedGrade] || 8;
+}
+
+function inferSubjectFromQuestion(text) {
+  const questionText = String(text || "").toLowerCase();
+  if (/[+\-x÷*/=]|\bquanto\b|\bresultado\b|\bmultiplo\b|\bmetade\b|\bn[uú]mero\b/.test(questionText)) {
+    return "Matemática";
+  }
+  if (/\bpalavra\b|\bverbo\b|\bplural\b|\brima\b|\bletra\b/.test(questionText)) {
+    return "Português";
+  }
+  if (/\blado\b|\bmaior\b|\boposto\b|\bdepois\b|\bsequencia\b|\blogica\b/.test(questionText)) {
+    return "Lógica";
+  }
+  return "Ciências";
+}
+
 function importQuestionsFromCsv(text) {
   const rows = parseCsv(text);
+  return importQuestionsFromRows(rows);
+}
+
+function importQuestionsFromRows(rows, fallbackGrade = "") {
   const headers = rows[0]?.map(normalizeHeader) || [];
   const findColumn = (...names) => names.map(normalizeHeader).map((name) => headers.indexOf(name)).find((index) => index >= 0);
 
@@ -547,9 +691,6 @@ function importQuestionsFromCsv(text) {
   };
 
   const requiredColumns = [
-    columns.grade,
-    columns.age,
-    columns.subject,
     columns.text,
     columns.optionA,
     columns.optionB,
@@ -569,10 +710,12 @@ function importQuestionsFromCsv(text) {
         options.push(row[columns.optionD]);
       }
 
+      const normalizedGrade = normalizeGradeLabel(columns.grade === undefined ? fallbackGrade : row[columns.grade]);
+
       return {
-        grade: row[columns.grade],
-        age: Number(row[columns.age]),
-        subject: row[columns.subject],
+        grade: normalizedGrade,
+        age: columns.age === undefined ? inferAgeFromGrade(normalizedGrade) : Number(row[columns.age] || inferAgeFromGrade(normalizedGrade)),
+        subject: columns.subject === undefined ? inferSubjectFromQuestion(row[columns.text]) : row[columns.subject] || inferSubjectFromQuestion(row[columns.text]),
         level: row[columns.level] || "Fácil",
         text: row[columns.text],
         options,
@@ -584,6 +727,37 @@ function importQuestionsFromCsv(text) {
       const hasValidAnswer = validAnswers.includes(question.correct);
       return question.grade && question.age && question.subject && question.text && question.options.every(Boolean) && hasValidAnswer;
     });
+}
+
+function inferGradeFromSheetName(sheetName) {
+  const normalized = normalizeSheetName(sheetName);
+  const match = normalized.match(/([1-5])\s*(?:o|º)?/i);
+  return match ? `${match[1]}º` : "";
+}
+
+function importQuestionsFromWorkbook(buffer) {
+  if (!window.XLSX) {
+    throw new Error("Leitor de planilha indisponível.");
+  }
+
+  const workbook = window.XLSX.read(buffer, { type: "array" });
+  const allQuestions = [];
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = window.XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      raw: false,
+      defval: "",
+    });
+
+    if (!rows.length) return;
+    const gradeFromSheet = inferGradeFromSheetName(sheetName);
+    const imported = importQuestionsFromRows(rows, gradeFromSheet);
+    allQuestions.push(...imported);
+  });
+
+  return allQuestions;
 }
 
 function getResults() {
@@ -654,13 +828,13 @@ viewTargetButtons.forEach((button) => {
 });
 
 function setActiveView(view) {
-  if (isProtectedView(view) && !parentAreaUnlocked) {
+  if (parentPasswordEnabled && isProtectedView(view) && !parentAreaUnlocked) {
     pendingProtectedView = view;
     showPasswordGate();
     return;
   }
 
-  if (view !== "parent") {
+  if (parentPasswordEnabled && view !== "parent") {
     parentAreaUnlocked = false;
   }
 
@@ -677,7 +851,7 @@ function setActiveView(view) {
 }
 
 function isProtectedView(view) {
-  return view === "parent";
+  return parentPasswordEnabled && view === "parent";
 }
 
 function showPasswordGate() {
@@ -744,13 +918,27 @@ clearResultsButton.addEventListener("click", () => {
 });
 
 manualUnlockButton.addEventListener("click", () => {
-  beginUnlockPeriod();
+  setTestModeEnabled(true);
+  startRound();
+  setActiveView("child");
+});
+
+stopTestButton.addEventListener("click", () => {
+  setTestModeEnabled(false);
+  clearUnlockTimer();
+  localStorage.removeItem("smartUnlockUnlockedUntil");
+  phoneFrame.classList.add("screen-free");
+  educationGate.hidden = true;
+  unlockedState.hidden = true;
   setActiveView("child");
 });
 
 studentGradeSelect.addEventListener("change", () => {
   localStorage.setItem("smartUnlockStudentGrade", studentGradeSelect.value);
-  startRound();
+  firestoreGradeCache.delete(studentGradeSelect.value);
+  if (isTestModeEnabled()) {
+    startRound();
+  }
 });
 
 unlockTimeSelect.addEventListener("change", () => {
@@ -762,8 +950,15 @@ questionCsvInput.addEventListener("change", async (event) => {
   if (!file) return;
 
   try {
-    const text = await file.text();
-    const importedQuestions = importQuestionsFromCsv(text);
+    let importedQuestions = [];
+
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      const buffer = await file.arrayBuffer();
+      importedQuestions = importQuestionsFromWorkbook(buffer);
+    } else {
+      const text = await file.text();
+      importedQuestions = importQuestionsFromCsv(text);
+    }
 
     if (!importedQuestions.length) {
       throw new Error("Nenhuma questão válida encontrada.");
@@ -772,20 +967,26 @@ questionCsvInput.addEventListener("change", async (event) => {
     const normalizedQuestions = ensureFourOptions(importedQuestions);
     localStorage.setItem("smartUnlockQuestions", JSON.stringify(normalizedQuestions));
     localStorage.setItem("smartUnlockQuestionsUpdatedAt", formatSyncDate());
+    firestoreGradeCache.clear();
     questions = normalizedQuestions;
     renderQuestionBankStatus();
-    startRound();
+    if (isTestModeEnabled()) {
+      startRound();
+    }
   } catch (error) {
-    questionBankStatus.textContent = "Não consegui importar. Confira as colunas da planilha.";
+    questionBankStatus.textContent = "Não consegui importar. Use CSV simples ou planilha XLSX com abas por ano.";
   } finally {
     event.target.value = "";
   }
 });
 
 window.addEventListener("smartUnlockQuestionsUpdated", () => {
+  firestoreGradeCache.clear();
   questions = loadQuestions();
   renderQuestionBankStatus();
-  startRound();
+  if (isTestModeEnabled()) {
+    startRound();
+  }
 });
 
 function formatSyncDate() {
@@ -797,10 +998,28 @@ function formatSyncDate() {
   });
 }
 
+function runSplashScreen() {
+  window.setTimeout(() => {
+    splashScreen.classList.add("is-hidden");
+    setActiveView("child");
+    const unlockedUntil = Number(localStorage.getItem("smartUnlockUnlockedUntil") || "0");
+    const hasActiveUnlock = unlockedUntil > Date.now();
+
+    if (!hasActiveUnlock && !isTestModeEnabled()) {
+      startRound();
+    }
+  }, splashDurationMs);
+}
+
 if (!restoreUnlockState()) {
-  startRound();
+  if (isTestModeEnabled()) {
+    startRound();
+  } else {
+    renderIdleStudentState();
+  }
 }
 renderParentDashboard();
 renderQuestionBankStatus();
 renderStudentGradeSelect();
 renderUnlockTimeSelect();
+runSplashScreen();

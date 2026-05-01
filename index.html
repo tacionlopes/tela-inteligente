@@ -5,8 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desbloqueio Inteligente</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
   </head>
   <body>
+    <div id="splashScreen" class="splash-screen" aria-hidden="true">
+      <div class="splash-logo-wrap">
+        <div class="brand-logo splash-logo" aria-hidden="true">
+          <span class="cap-top"></span>
+          <span class="cap-base"></span>
+          <span class="cap-tail"></span>
+        </div>
+      </div>
+    </div>
+
     <main class="app-shell">
       <div class="mobile-stage">
         <section class="topbar" aria-label="Navegação principal">
@@ -39,35 +53,18 @@
           </div>
 
           <div class="phone-content">
-            <div class="sim-status-row" aria-hidden="true">
-              <span>🏠</span>
-              <span>📅</span>
-              <span>🌤</span>
-              <span>📷</span>
-            </div>
-            <div class="sim-home-grid" aria-hidden="true">
-              <span>Phone</span>
-              <span>Safari</span>
-              <span>Mail</span>
-              <span>Chat</span>
-              <span>Fotos</span>
-              <span>Vídeo</span>
-              <span>Jogos</span>
-              <span>Aula</span>
-            </div>
-            <div class="sim-dock" aria-hidden="true">
-              <span>📞</span>
-              <span>🌐</span>
-              <span>✉️</span>
-              <span>💬</span>
-            </div>
-            <button id="openCountdownAppButton" class="student-app-button" type="button">
+            <button
+              id="openCountdownAppButton"
+              class="student-app-button"
+              type="button"
+              aria-label="Abrir Tela Inteligente"
+              title="Tela Inteligente"
+            >
               <span class="brand-logo mini-app-logo" aria-hidden="true">
                 <span class="cap-top"></span>
                 <span class="cap-base"></span>
                 <span class="cap-tail"></span>
               </span>
-              <span>Tela Inteligente</span>
             </button>
           </div>
 
@@ -168,10 +165,13 @@
             <div class="import-actions">
               <label class="file-button import-button">
                 Importar questões
-                <input id="questionCsvInput" type="file" accept=".csv,text/csv" />
+                <input id="questionCsvInput" type="file" accept=".csv,text/csv,.xlsx,.xls" />
               </label>
               <button id="manualUnlockButton" class="primary-button import-button" type="button">
-                Liberar tela
+                Teste
+              </button>
+              <button id="stopTestButton" class="secondary-button import-button" type="button">
+                Parar Teste
               </button>
             </div>
             <p id="questionBankStatus">Usando questões padrão do protótipo.</p>
