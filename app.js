@@ -1,103 +1,33 @@
 const defaultQuestions = [
-  {
-    grade: "1º",
-    age: 6,
-    subject: "Matemática",
-    level: "Fácil",
-    text: "Quanto é 2 + 1?",
-    options: ["2", "3", "4", "5"],
-    correct: "B",
-  },
-  {
-    grade: "1º",
-    age: 6,
-    subject: "Português",
-    level: "Fácil",
-    text: "Qual palavra é um animal?",
-    options: ["Casa", "Cachorro", "Bola", "Mesa"],
-    correct: "B",
-  },
-  {
-    grade: "1º",
-    age: 6,
-    subject: "Lógica",
-    level: "Fácil",
-    text: "Qual é maior?",
-    options: ["1", "5", "2", "0"],
-    correct: "B",
-  },
-  {
-    grade: "1º",
-    age: 6,
-    subject: "Ciências",
-    level: "Fácil",
-    text: "O sol aparece de dia ou de noite?",
-    options: ["Dia", "Noite", "Nunca", "Chuva"],
-    correct: "A",
-  },
-  {
-    grade: "1º",
-    age: 6,
-    subject: "Matemática",
-    level: "Fácil",
-    text: "Quanto é 3 x 10?",
-    options: ["20", "15", "40", "30"],
-    correct: "D",
-  },
-  {
-    grade: "2º",
-    age: 7,
-    subject: "Português",
-    level: "Fácil",
-    text: "Qual palavra começa com B?",
-    options: ["Bola", "Casa", "Dedo", "Lua"],
-    correct: "A",
-  },
-  {
-    grade: "3º",
-    age: 8,
-    subject: "Lógica",
-    level: "Fácil",
-    text: "Qual número vem depois do 9?",
-    options: ["8", "10", "7", "6"],
-    correct: "B",
-  },
-  {
-    grade: "4º",
-    age: 9,
-    subject: "Ciências",
-    level: "Fácil",
-    text: "As plantas precisam de luz?",
-    options: ["Sim", "Não", "Nunca", "Só água"],
-    correct: "A",
-  },
-  {
-    grade: "5º",
-    age: 10,
-    subject: "Matemática",
-    level: "Médio",
-    text: "Quanto é 20 dividido por 4?",
-    options: ["4", "5", "6", "8"],
-    correct: "B",
-  },
-  {
-    grade: "3º",
-    age: 8,
-    subject: "Português",
-    level: "Médio",
-    text: "Qual palavra está no plural?",
-    options: ["Casa", "Livros", "Flor", "Papel"],
-    correct: "B",
-  },
-  {
-    grade: "4º",
-    age: 9,
-    subject: "Lógica",
-    level: "Fácil",
-    text: "Qual figura tem três lados?",
-    options: ["Quadrado", "Triângulo", "Círculo", "Retângulo"],
-    correct: "B",
-  },
+  { grade: "1º", age: 6, subject: "Matemática", level: "Fácil", text: "Quanto é 2 + 1?", options: ["2", "3", "4", "5"], correct: "B" },
+  { grade: "1º", age: 6, subject: "Português", level: "Fácil", text: "Qual palavra é um animal?", options: ["Casa", "Cachorro", "Bola", "Mesa"], correct: "B" },
+  { grade: "1º", age: 6, subject: "Lógica", level: "Fácil", text: "Qual é maior?", options: ["1", "5", "2", "0"], correct: "B" },
+  { grade: "1º", age: 6, subject: "Ciências", level: "Fácil", text: "O sol aparece de dia ou de noite?", options: ["Dia", "Noite", "Nunca", "Chuva"], correct: "A" },
+  { grade: "1º", age: 6, subject: "Matemática", level: "Fácil", text: "Quanto é 4 + 1?", options: ["4", "5", "6", "7"], correct: "B" },
+
+  { grade: "2º", age: 7, subject: "Matemática", level: "Fácil", text: "Quanto é 5 - 2?", options: ["2", "3", "4", "5"], correct: "B" },
+  { grade: "2º", age: 7, subject: "Português", level: "Fácil", text: "Qual palavra começa com B?", options: ["Bola", "Casa", "Dedo", "Lua"], correct: "A" },
+  { grade: "2º", age: 7, subject: "Lógica", level: "Fácil", text: "Qual objeto usamos para escrever?", options: ["Lápis", "Prato", "Sapato", "Janela"], correct: "A" },
+  { grade: "2º", age: 7, subject: "Ciências", level: "Fácil", text: "Qual animal mia?", options: ["Cachorro", "Pato", "Gato", "Peixe"], correct: "C" },
+  { grade: "2º", age: 7, subject: "Matemática", level: "Fácil", text: "Quanto é 3 + 4?", options: ["5", "6", "7", "8"], correct: "C" },
+
+  { grade: "3º", age: 8, subject: "Matemática", level: "Fácil", text: "Quanto é 4 + 4?", options: ["6", "7", "8", "9"], correct: "C" },
+  { grade: "3º", age: 8, subject: "Português", level: "Médio", text: "Qual palavra está no plural?", options: ["Casa", "Livros", "Flor", "Papel"], correct: "B" },
+  { grade: "3º", age: 8, subject: "Lógica", level: "Fácil", text: "Qual número vem depois do 9?", options: ["8", "10", "7", "6"], correct: "B" },
+  { grade: "3º", age: 8, subject: "Ciências", level: "Fácil", text: "O Sol aparece mais de dia?", options: ["Sim", "Não", "Às vezes", "Nunca"], correct: "A" },
+  { grade: "3º", age: 8, subject: "Matemática", level: "Fácil", text: "Quanto é 9 - 3?", options: ["5", "6", "7", "8"], correct: "B" },
+
+  { grade: "4º", age: 9, subject: "Matemática", level: "Médio", text: "Quanto é 3 x 2?", options: ["5", "6", "7", "8"], correct: "B" },
+  { grade: "4º", age: 9, subject: "Português", level: "Médio", text: "Qual frase termina com ponto?", options: ["Eu fui.", "Eu fui?", "Eu fui!", "Eu fui,"], correct: "A" },
+  { grade: "4º", age: 9, subject: "Lógica", level: "Fácil", text: "Qual figura tem três lados?", options: ["Quadrado", "Triângulo", "Círculo", "Retângulo"], correct: "B" },
+  { grade: "4º", age: 9, subject: "Ciências", level: "Fácil", text: "As plantas precisam de luz?", options: ["Sim", "Não", "Nunca", "Só água"], correct: "A" },
+  { grade: "4º", age: 9, subject: "Matemática", level: "Fácil", text: "Quanto é 12 - 5?", options: ["6", "7", "8", "9"], correct: "B" },
+
+  { grade: "5º", age: 10, subject: "Matemática", level: "Médio", text: "Quanto é 20 dividido por 4?", options: ["4", "5", "6", "8"], correct: "B" },
+  { grade: "5º", age: 10, subject: "Português", level: "Médio", text: "Qual palavra é um verbo?", options: ["Correr", "Mesa", "Azul", "Casa"], correct: "A" },
+  { grade: "5º", age: 10, subject: "Lógica", level: "Fácil", text: "Qual número é par?", options: ["7", "9", "12", "11"], correct: "C" },
+  { grade: "5º", age: 10, subject: "Ciências", level: "Médio", text: "Qual órgão usamos para respirar?", options: ["Osso", "Estômago", "Pulmão", "Joelho"], correct: "C" },
+  { grade: "5º", age: 10, subject: "Matemática", level: "Médio", text: "Quanto é 15 - 6?", options: ["7", "8", "9", "10"], correct: "C" },
 ];
 
 const roundSize = 5;
@@ -108,12 +38,17 @@ let selectedAnswer = "";
 let correctCount = 0;
 let answered = false;
 let retryPending = false;
+let introMode = true;
+let retryQuestionMode = false;
+let firstAttemptResults = [];
 let parentAreaUnlocked = false;
 let pendingProtectedView = "";
 let unlockTimerId = null;
 let unlockCountdownId = null;
 let unlockMessageTimerId = null;
+let retryRestartTimerId = null;
 let firestoreDb = null;
+let pendingImportGrade = "";
 const splashDurationMs = 3000;
 const parentPasswordEnabled = false;
 const firestoreGradeCache = new Map();
@@ -134,15 +69,20 @@ const educationGate = document.querySelector("#educationGate");
 const unlockedState = document.querySelector("#unlockedState");
 const unlockMessage = document.querySelector("#unlockMessage");
 const unlockCountdown = document.querySelector("#unlockCountdown");
+const gateTitle = document.querySelector("#gateTitle");
+const gateSubtitle = document.querySelector("#gateSubtitle");
+const scoreSuffix = document.querySelector("#scoreSuffix");
 const openCountdownAppButton = document.querySelector("#openCountdownAppButton");
 const closeCountdownButton = document.querySelector("#closeCountdownButton");
 const gradeLabel = document.querySelector("#gradeLabel");
 const scoreLabel = document.querySelector("#scoreLabel");
 const progressBar = document.querySelector("#progressBar");
 const questionCounter = document.querySelector("#questionCounter");
+const supportText = document.querySelector("#supportText");
 const questionText = document.querySelector("#questionText");
 const answerList = document.querySelector("#answerList");
 const feedback = document.querySelector("#feedback");
+const explanationBox = document.querySelector("#explanationBox");
 const nextButton = document.querySelector("#nextButton");
 const clearResultsButton = document.querySelector("#clearResultsButton");
 const manualUnlockButton = document.querySelector("#manualUnlockButton");
@@ -153,6 +93,7 @@ const bestSubject = document.querySelector("#bestSubject");
 const resultsList = document.querySelector("#resultsList");
 const questionBankStatus = document.querySelector("#questionBankStatus");
 const questionCsvInput = document.querySelector("#questionCsvInput");
+const importGradeButtons = document.querySelectorAll(".import-grade-button");
 const studentGradeSelect = document.querySelector("#studentGradeSelect");
 const unlockTimeSelect = document.querySelector("#unlockTimeSelect");
 
@@ -189,7 +130,7 @@ function mapFirestoreQuestion(docData) {
   return {
     grade,
     age: Number(docData.age || docData.idade || inferAgeFromGrade(grade)),
-    subject: docData.subject || docData.materia || inferSubjectFromQuestion(docData.text || docData.question || docData.pergunta),
+    subject: normalizeSubjectName(docData.subject || docData.materia || inferSubjectFromQuestion(docData.text || docData.question || docData.pergunta)),
     level: docData.level || docData.nivel || "Fácil",
     text: docData.text || docData.question || docData.pergunta || "",
     options,
@@ -232,6 +173,7 @@ function setTestModeEnabled(enabled) {
 }
 
 function renderIdleStudentState() {
+  clearRetryRestartTimer();
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
   phoneFrame.classList.add("screen-free");
@@ -239,20 +181,137 @@ function renderIdleStudentState() {
   unlockedState.hidden = true;
 }
 
+function getIntroSubtitle() {
+  return `Responda 5 perguntas para liberar<br />o celular por ${formatMinutesLabel(getUnlockMinutes())}`;
+}
+
+function formatMinutesLabel(minutes) {
+  return `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+}
+
+function getExplanationForQuestion(question) {
+  const correctIndex = question.correct.charCodeAt(0) - 65;
+  const correctOption = question.options[correctIndex] || "";
+  const text = question.text.toLowerCase();
+  const mathMatch = question.text.match(/(\d+)\s*([+\-x*/])\s*(\d+)/);
+
+  if (mathMatch) {
+    const left = Number(mathMatch[1]);
+    const operator = mathMatch[2];
+    const right = Number(mathMatch[3]);
+    const result =
+      operator === "+"
+        ? left + right
+        : operator === "-"
+          ? left - right
+          : operator === "x" || operator === "*"
+            ? left * right
+            : right !== 0
+              ? left / right
+              : correctOption;
+
+    return {
+      explanation: `${left} ${operator} ${right} = ${result}`,
+      hint: operator === "-" ? "Tire aos poucos para descobrir." : "Conte nos dedos!",
+    };
+  }
+
+  if (text.includes("animal")) {
+    return {
+      explanation: `${correctOption} é um animal.`,
+      hint: "Pense nos bichinhos do dia a dia.",
+    };
+  }
+
+  if (text.includes("plural")) {
+    return {
+      explanation: `${correctOption} mostra mais de um.`,
+      hint: "Quando tem muitos, a palavra costuma mudar.",
+    };
+  }
+
+  if (text.includes("rima")) {
+    return {
+      explanation: `${correctOption} tem som parecido no final.`,
+      hint: "Leia as palavras bem devagar.",
+    };
+  }
+
+  return {
+    explanation: `A resposta certa é ${correctOption}.`,
+    hint: "Leia com calma e tente outra vez.",
+  };
+}
+
+function showIntroScreen(title, subtitle, buttonText) {
+  clearRetryRestartTimer();
+  introMode = true;
+  retryPending = false;
+  retryQuestionMode = false;
+  answered = false;
+  selectedAnswer = "";
+  gradeLabel.textContent = getGradeDisplayLabel();
+  gateTitle.textContent = title;
+  gateSubtitle.innerHTML = subtitle;
+  questionCounter.textContent = `Progresso: 0/${roundSize}`;
+  scoreLabel.textContent = "0";
+  scoreSuffix.textContent = "⭐";
+  progressBar.style.width = "0%";
+  supportText.textContent = "";
+  questionText.textContent = "Você está aprendendo muito!";
+  questionText.classList.add("is-message");
+  answerList.innerHTML = "";
+  feedback.innerHTML = "";
+  feedback.className = "feedback";
+  explanationBox.hidden = true;
+  explanationBox.innerHTML = "";
+  nextButton.textContent = buttonText;
+  nextButton.disabled = false;
+}
+
+function refreshStudentGradePreview() {
+  gradeLabel.textContent = getGradeDisplayLabel();
+}
+
+function showInsufficientQuestionsState() {
+  showIntroScreen(
+    "Tempo de uso pausado",
+    "Não há questões suficientes para este ano. Importe mais questões.",
+    "Começar agora",
+  );
+  questionText.textContent = "Não há questões suficientes para este ano. Importe mais questões.";
+  questionText.classList.add("is-message");
+  supportText.textContent = "";
+  nextButton.disabled = true;
+  educationGate.hidden = false;
+  unlockedState.hidden = true;
+}
+
 async function startRound() {
+  clearRetryRestartTimer();
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
   phoneFrame.classList.remove("screen-free");
   const eligibleQuestions = await getQuestionsForSelectedGrade();
+  if (eligibleQuestions.length < roundSize) {
+    showInsufficientQuestionsState();
+    return;
+  }
   roundQuestions = buildDiversifiedRound(eligibleQuestions);
   currentIndex = 0;
   selectedAnswer = "";
   correctCount = 0;
+  firstAttemptResults = [];
   answered = false;
   retryPending = false;
+  retryQuestionMode = false;
   educationGate.hidden = false;
   unlockedState.hidden = true;
-  renderQuestion();
+  showIntroScreen(
+    "Tempo de uso pausado",
+    getIntroSubtitle(),
+    "Começar agora",
+  );
 }
 
 async function startOverlayRound() {
@@ -261,64 +320,87 @@ async function startOverlayRound() {
     return;
   }
 
+  clearRetryRestartTimer();
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
   phoneFrame.classList.remove("screen-free");
   const eligibleQuestions = await getQuestionsForSelectedGrade();
+  if (eligibleQuestions.length < roundSize) {
+    showInsufficientQuestionsState();
+    return;
+  }
   roundQuestions = buildDiversifiedRound(eligibleQuestions);
   currentIndex = 0;
   selectedAnswer = "";
   correctCount = 0;
+  firstAttemptResults = [];
   answered = false;
   retryPending = false;
+  retryQuestionMode = false;
   educationGate.hidden = false;
   unlockedState.hidden = true;
-  renderQuestion();
+  showIntroScreen(
+    "Tempo acabou",
+    "Vamos jogar mais uma vez?<br />Você está aprendendo muito!",
+    "Novo desafio",
+  );
 }
 
 function buildDiversifiedRound(questionPool) {
-  const targetSize = Math.min(roundSize, questionPool.length);
-  const recentQuestions = JSON.parse(localStorage.getItem("smartUnlockRecentQuestions") || "[]");
-  const recentSet = new Set(recentQuestions);
+  return getRandomQuestionsByYear(getSelectedGrade(), roundSize, questionPool);
+}
+
+function getLastRoundStorageKey(year) {
+  return `smartUnlockLastRoundQuestions:${normalizeGradeLabel(year)}`;
+}
+
+function getLastRoundQuestionsByYear(year) {
+  return JSON.parse(localStorage.getItem(getLastRoundStorageKey(year)) || "[]");
+}
+
+function saveLastRoundQuestionsByYear(year, questionsForRound) {
+  localStorage.setItem(
+    getLastRoundStorageKey(year),
+    JSON.stringify(questionsForRound.map((question) => question.text)),
+  );
+}
+
+function getRandomQuestionsByYear(year, count = 5, questionPool = []) {
+  const normalizedYear = normalizeGradeLabel(year);
+  const eligibleQuestions = questionPool.filter((question) => question.grade === normalizedYear);
+  const targetSize = Math.min(count, eligibleQuestions.length);
+
+  if (eligibleQuestions.length <= targetSize) {
+    const fullRound = shuffle(eligibleQuestions).slice(0, targetSize);
+    saveLastRoundQuestionsByYear(normalizedYear, fullRound);
+    return fullRound;
+  }
+
+  const lastRoundSet = new Set(getLastRoundQuestionsByYear(normalizedYear));
+  const freshQuestions = shuffle(eligibleQuestions.filter((question) => !lastRoundSet.has(question.text)));
+  const repeatedQuestions = shuffle(eligibleQuestions.filter((question) => lastRoundSet.has(question.text)));
   const selected = [];
   const selectedTexts = new Set();
-  const questionsBySubject = groupQuestionsBySubject(shuffle(questionPool));
-  const subjectQueues = shuffle(Object.values(questionsBySubject));
 
-  while (selected.length < targetSize && subjectQueues.some((queue) => queue.length)) {
-    subjectQueues.forEach((queue) => {
-      if (selected.length >= targetSize) return;
-      const question = takeNextQuestion(queue, recentSet, selectedTexts) || takeNextQuestion(queue, new Set(), selectedTexts);
-      if (question) {
-        selected.push(question);
-        selectedTexts.add(question.text);
-      }
-    });
+  while (selected.length < targetSize && freshQuestions.length) {
+    const question = freshQuestions.shift();
+    if (!selectedTexts.has(question.text)) {
+      selected.push(question);
+      selectedTexts.add(question.text);
+    }
   }
 
-  const remaining = shuffle(questionPool).filter((question) => !selectedTexts.has(question.text));
-  while (selected.length < targetSize && remaining.length) {
-    const question = remaining.shift();
-    selected.push(question);
-    selectedTexts.add(question.text);
+  while (selected.length < targetSize && repeatedQuestions.length) {
+    const question = repeatedQuestions.shift();
+    if (!selectedTexts.has(question.text)) {
+      selected.push(question);
+      selectedTexts.add(question.text);
+    }
   }
 
-  localStorage.setItem("smartUnlockRecentQuestions", JSON.stringify(selected.map((question) => question.text)));
-  return shuffle(selected);
-}
-
-function groupQuestionsBySubject(questionPool) {
-  return questionPool.reduce((groups, question) => {
-    groups[question.subject] ||= [];
-    groups[question.subject].push(question);
-    return groups;
-  }, {});
-}
-
-function takeNextQuestion(queue, recentSet, selectedTexts) {
-  const index = queue.findIndex((question) => !recentSet.has(question.text) && !selectedTexts.has(question.text));
-  if (index < 0) return null;
-  return queue.splice(index, 1)[0];
+  const round = shuffle(selected).slice(0, targetSize);
+  saveLastRoundQuestionsByYear(normalizedYear, round);
+  return round;
 }
 
 function getSelectedGrade() {
@@ -329,29 +411,89 @@ function getUnlockMinutes() {
   return Number(localStorage.getItem("smartUnlockMinutes") || "15");
 }
 
+function getGradeDisplayLabel(grade = getSelectedGrade()) {
+  return `${grade.toUpperCase()} ANO • ${inferAgeFromGrade(grade)} ANOS`;
+}
+
+function getFallbackQuestionsForGrade(selectedGrade) {
+  return defaultQuestions.filter((question) => question.grade === selectedGrade);
+}
+
+function createEmptyQuestionBank() {
+  return {
+    "1º": [],
+    "2º": [],
+    "3º": [],
+    "4º": [],
+    "5º": [],
+  };
+}
+
+function normalizeQuestionBank(rawBank) {
+  const bank = createEmptyQuestionBank();
+  if (!rawBank || typeof rawBank !== "object") return bank;
+
+  Object.entries(rawBank).forEach(([grade, list]) => {
+    const normalizedGrade = normalizeGradeLabel(grade);
+    if (!bank[normalizedGrade] || !Array.isArray(list)) return;
+    bank[normalizedGrade] = ensureFourOptions(list).map((question) => ({
+      ...question,
+      grade: normalizedGrade,
+      age: Number(question.age || inferAgeFromGrade(normalizedGrade)),
+    }));
+  });
+
+  return bank;
+}
+
+function getStoredQuestionBank() {
+  return normalizeQuestionBank(JSON.parse(localStorage.getItem("smartUnlockQuestionBank") || "null"));
+}
+
+function saveQuestionBank(bank) {
+  localStorage.setItem("smartUnlockQuestionBank", JSON.stringify(normalizeQuestionBank(bank)));
+}
+
+function getImportedQuestionsForGrade(grade) {
+  return getStoredQuestionBank()[normalizeGradeLabel(grade)] || [];
+}
+
 async function getQuestionsForSelectedGrade() {
   const selectedGrade = getSelectedGrade();
-  const remoteQuestions = await fetchQuestionsFromFirestore(selectedGrade);
-  if (remoteQuestions.length) {
-    return remoteQuestions;
+  const importedQuestions = getImportedQuestionsForGrade(selectedGrade);
+  if (importedQuestions.length) {
+    return importedQuestions.filter((question) => question.grade === selectedGrade);
   }
 
-  const filteredQuestions = questions.filter((question) => question.grade === selectedGrade);
-  return filteredQuestions.length ? filteredQuestions : questions;
+  const remoteQuestions = await fetchQuestionsFromFirestore(selectedGrade);
+  if (remoteQuestions.length) {
+    return remoteQuestions.filter((question) => question.grade === selectedGrade);
+  }
+
+  return getFallbackQuestionsForGrade(selectedGrade);
 }
 
 function renderQuestion() {
   const question = roundQuestions[currentIndex];
   const totalRoundQuestions = roundQuestions.length;
+  introMode = false;
   selectedAnswer = "";
   answered = false;
-  gradeLabel.textContent = `${question.grade} ano • ${question.age} anos • ${question.subject}`;
-  questionCounter.textContent = `Etapa ${currentIndex + 1} de ${totalRoundQuestions}`;
+  retryQuestionMode = false;
+  gradeLabel.textContent = `${getSelectedGrade().toUpperCase()} ANO • ${inferAgeFromGrade(getSelectedGrade())} ANOS • ${question.subject}`;
+  gateTitle.textContent = "Desafio rápido";
+  gateSubtitle.textContent = "Leia com calma e escolha uma resposta.";
+  questionCounter.textContent = `Progresso: ${currentIndex + 1}/${totalRoundQuestions}`;
   questionText.textContent = question.text;
-  scoreLabel.textContent = calculateScore();
+  questionText.classList.remove("is-message");
+  scoreLabel.textContent = String(correctCount);
+  scoreSuffix.textContent = "⭐";
   progressBar.style.width = `${((currentIndex + 1) / totalRoundQuestions) * 100}%`;
-  feedback.textContent = "";
+  supportText.textContent = correctCount ? `⭐ ${correctCount} estrelinha${correctCount > 1 ? "s" : ""} • Você está indo muito bem!` : "Você consegue! Vamos juntos.";
+  feedback.innerHTML = "";
   feedback.className = "feedback";
+  explanationBox.hidden = true;
+  explanationBox.innerHTML = "";
   nextButton.textContent = "Responder";
   nextButton.disabled = true;
 
@@ -382,6 +524,11 @@ function calculateScore() {
 }
 
 function submitAnswer() {
+  if (introMode) {
+    renderQuestion();
+    return;
+  }
+
   if (retryPending) {
     if (isTestModeEnabled()) {
       startOverlayRound();
@@ -396,11 +543,37 @@ function submitAnswer() {
   if (!answered) {
     answered = true;
     const isCorrect = selectedAnswer === question.correct;
-    if (isCorrect) correctCount += 1;
+    if (!firstAttemptResults[currentIndex]) {
+      firstAttemptResults[currentIndex] = {
+        subject: question.subject,
+        correct: isCorrect,
+      };
+    }
+    updatePerformanceForAnswer(question.subject, isCorrect);
+    if (isCorrect) {
+      correctCount += 1;
+    }
 
-    scoreLabel.textContent = calculateScore();
-    feedback.textContent = isCorrect ? "Resposta certa." : "Resposta incorreta.";
+    scoreLabel.textContent = String(correctCount);
+    feedback.innerHTML = isCorrect
+      ? "✅ Muito bem! Você acertou 👏 ⭐ +1 estrelinha"
+      : "❌ Quase!<br />Vamos aprender juntos 😊";
     feedback.className = `feedback ${isCorrect ? "success" : "warning"}`;
+    supportText.textContent = correctCount ? `⭐ ${correctCount} estrelinha${correctCount > 1 ? "s" : ""} • Você está indo muito bem!` : "Você consegue! Vamos juntos.";
+
+    if (!isCorrect) {
+      const explanation = getExplanationForQuestion(question);
+      explanationBox.innerHTML = `🧠 Explicação:<br />${explanation.explanation}<br /><br />📌 Dica:<br />${explanation.hint}`;
+      explanationBox.hidden = false;
+      saveResult(calculateScore(), false);
+      renderParentDashboard();
+      retryPending = true;
+      nextButton.textContent = "Novo desafio";
+      nextButton.disabled = false;
+      queueRetryRound();
+      return;
+    }
+
     nextButton.textContent = currentIndex === roundQuestions.length - 1 ? "Ver resultado" : "Próxima";
     return;
   }
@@ -425,7 +598,7 @@ function finishRound() {
     return;
   }
 
-  feedback.textContent = "É preciso acertar todas para liberar.";
+  feedback.innerHTML = "❌ Quase!<br />Vamos aprender juntos 😊";
   feedback.className = "feedback warning";
   nextButton.textContent = "Tentar nova rodada";
   retryPending = true;
@@ -436,10 +609,34 @@ function beginUnlockPeriod() {
   localStorage.setItem("smartUnlockUnlockedUntil", String(unlockedUntil));
   phoneFrame.classList.add("screen-free");
   educationGate.hidden = true;
-  unlockMessage.textContent = `Parabéns! Você acertou todas as questões e ganhou mais ${getUnlockMinutes()} minutos de uso.`;
+  unlockMessage.textContent = `Você conseguiu! Agora você pode usar o celular por ${formatMinutesLabel(getUnlockMinutes())}. Use com cuidado 😉`;
   unlockedState.hidden = false;
   scheduleOverlayReturn();
   startUnlockCountdown();
+}
+
+function clearRetryRestartTimer() {
+  if (retryRestartTimerId) {
+    window.clearTimeout(retryRestartTimerId);
+    retryRestartTimerId = null;
+  }
+}
+
+function restartRoundAfterFailure() {
+  clearRetryRestartTimer();
+  if (!retryPending) return;
+  if (isTestModeEnabled()) {
+    startOverlayRound();
+  } else {
+    startRound();
+  }
+}
+
+function queueRetryRound() {
+  clearRetryRestartTimer();
+  retryRestartTimerId = window.setTimeout(() => {
+    restartRoundAfterFailure();
+  }, 2500);
 }
 
 function scheduleOverlayReturn() {
@@ -474,7 +671,7 @@ function restoreUnlockState() {
   if (unlockedUntil > Date.now()) {
     phoneFrame.classList.add("screen-free");
     educationGate.hidden = true;
-    unlockMessage.textContent = `Parabéns! Você acertou todas as questões e ganhou mais ${getUnlockMinutes()} minutos de uso.`;
+    unlockMessage.textContent = `Você conseguiu! Agora você pode usar o celular por ${formatMinutesLabel(getUnlockMinutes())}. Use com cuidado 😉`;
     unlockedState.hidden = true;
     scheduleOverlayReturn();
     startUnlockCountdown();
@@ -521,9 +718,23 @@ function updateUnlockCountdown() {
 function saveResult(score, passed) {
   const results = getResults();
   const subjectHits = {};
+  const subjectPerformance = {};
 
   roundQuestions.forEach((question) => {
     subjectHits[question.subject] = (subjectHits[question.subject] || 0) + 1;
+  });
+
+  firstAttemptResults.forEach((entry) => {
+    if (!entry) return;
+    subjectPerformance[entry.subject] ||= { total: 0, correct: 0 };
+    subjectPerformance[entry.subject].total += 1;
+    if (entry.correct) {
+      subjectPerformance[entry.subject].correct += 1;
+    }
+  });
+
+  Object.keys(subjectHits).forEach((subject) => {
+    subjectPerformance[subject] ||= { total: 0, correct: 0 };
   });
 
   results.unshift({
@@ -539,17 +750,18 @@ function saveResult(score, passed) {
     passed,
     unlockMinutes: getUnlockMinutes(),
     subjects: Object.keys(subjectHits).join(", "),
+    subjectPerformance,
   });
 
   localStorage.setItem("smartUnlockResults", JSON.stringify(results.slice(0, 20)));
 }
 
 function loadQuestions() {
-  const imported = JSON.parse(localStorage.getItem("smartUnlockQuestions") || "null");
-  if (Array.isArray(imported) && imported.length >= 1) {
+  const imported = Object.values(getStoredQuestionBank()).flat();
+  if (imported.length >= 1) {
     return ensureFourOptions(imported);
   }
-  return defaultQuestions.slice(0, 5);
+  return defaultQuestions;
 }
 
 function ensureFourOptions(questionList) {
@@ -576,11 +788,13 @@ function ensureFourOptions(questionList) {
 }
 
 function renderQuestionBankStatus() {
-  const imported = JSON.parse(localStorage.getItem("smartUnlockQuestions") || "null");
+  const imported = Object.entries(getStoredQuestionBank())
+    .map(([grade, list]) => ({ grade, total: list.length }))
+    .filter((entry) => entry.total > 0);
   const hasFirestore = Boolean(window.TELA_INTELIGENTE_FIREBASE_CONFIG?.projectId);
   questionBankStatus.textContent =
-    Array.isArray(imported) && imported.length
-      ? `${imported.length} questões importadas da planilha.`
+    imported.length
+      ? imported.map((entry) => `${entry.grade} ano: ${entry.total}`).join(" • ")
       : hasFirestore
         ? "Buscando questões do Firebase por ano escolar."
         : "Usando questões padrão do protótipo.";
@@ -668,12 +882,78 @@ function inferSubjectFromQuestion(text) {
   return "Ciências";
 }
 
-function importQuestionsFromCsv(text) {
-  const rows = parseCsv(text);
-  return importQuestionsFromRows(rows);
+function normalizeSubjectName(subject) {
+  const normalized = String(subject || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (normalized.includes("mat")) return "Matemática";
+  if (normalized.includes("port")) return "Português";
+  if (normalized.includes("log")) return "Lógica";
+  if (normalized.includes("cien")) return "Ciências";
+  return inferSubjectFromQuestion(subject);
 }
 
-function importQuestionsFromRows(rows, fallbackGrade = "") {
+function createPerformanceEntry() {
+  return {
+    "Matemática": { acertos: 0, erros: 0 },
+    "Português": { acertos: 0, erros: 0 },
+    "Ciências": { acertos: 0, erros: 0 },
+    "Lógica": { acertos: 0, erros: 0 },
+  };
+}
+
+function getPerformanceStore() {
+  const rawStore = JSON.parse(localStorage.getItem("smartUnlockPerformanceByYear") || "null");
+  const store = {};
+
+  ["1º", "2º", "3º", "4º", "5º"].forEach((grade) => {
+    const source = rawStore?.[grade] || {};
+    const base = createPerformanceEntry();
+    Object.keys(base).forEach((subject) => {
+      base[subject] = {
+        acertos: Number(source?.[subject]?.acertos || 0),
+        erros: Number(source?.[subject]?.erros || 0),
+      };
+    });
+    store[grade] = base;
+  });
+
+  return store;
+}
+
+function savePerformanceStore(store) {
+  localStorage.setItem("smartUnlockPerformanceByYear", JSON.stringify(store));
+}
+
+function updatePerformanceForAnswer(subject, isCorrect, grade = getSelectedGrade()) {
+  const normalizedGrade = normalizeGradeLabel(grade);
+  const normalizedSubject = normalizeSubjectName(subject);
+  const store = getPerformanceStore();
+  const yearPerformance = store[normalizedGrade] || createPerformanceEntry();
+
+  if (!yearPerformance[normalizedSubject]) {
+    yearPerformance[normalizedSubject] = { acertos: 0, erros: 0 };
+  }
+
+  if (isCorrect) {
+    yearPerformance[normalizedSubject].acertos += 1;
+  } else {
+    yearPerformance[normalizedSubject].erros += 1;
+  }
+
+  store[normalizedGrade] = yearPerformance;
+  savePerformanceStore(store);
+}
+
+function importQuestionsFromCsv(text, forcedGrade = "") {
+  const rows = parseCsv(text);
+  return importQuestionsFromRows(rows, forcedGrade);
+}
+
+function importQuestionsFromRows(rows, forcedGrade = "") {
   const headers = rows[0]?.map(normalizeHeader) || [];
   const findColumn = (...names) => names.map(normalizeHeader).map((name) => headers.indexOf(name)).find((index) => index >= 0);
 
@@ -688,18 +968,23 @@ function importQuestionsFromRows(rows, fallbackGrade = "") {
     optionD: findColumn("Alternativa D", "Opção D", "Opcao D", "D"),
     correct: findColumn("Resposta Correta", "Correta", "Gabarito"),
     level: findColumn("Nível", "Nivel", "Dificuldade"),
+    time: findColumn("Tempo", "Tempo (seg)", "Segundos"),
   };
 
   const requiredColumns = [
+    columns.grade,
     columns.text,
     columns.optionA,
     columns.optionB,
     columns.optionC,
+    columns.optionD,
     columns.correct,
+    columns.level,
+    columns.time,
   ];
 
   if (requiredColumns.some((column) => column === undefined)) {
-    throw new Error("CSV sem colunas obrigatórias.");
+    throw new Error("Arquivo inválido. Verifique o modelo CSV.");
   }
 
   return rows
@@ -710,12 +995,12 @@ function importQuestionsFromRows(rows, fallbackGrade = "") {
         options.push(row[columns.optionD]);
       }
 
-      const normalizedGrade = normalizeGradeLabel(columns.grade === undefined ? fallbackGrade : row[columns.grade]);
+      const normalizedGrade = normalizeGradeLabel(forcedGrade || row[columns.grade]);
 
       return {
         grade: normalizedGrade,
         age: columns.age === undefined ? inferAgeFromGrade(normalizedGrade) : Number(row[columns.age] || inferAgeFromGrade(normalizedGrade)),
-        subject: columns.subject === undefined ? inferSubjectFromQuestion(row[columns.text]) : row[columns.subject] || inferSubjectFromQuestion(row[columns.text]),
+        subject: normalizeSubjectName(columns.subject === undefined ? inferSubjectFromQuestion(row[columns.text]) : row[columns.subject] || inferSubjectFromQuestion(row[columns.text])),
         level: row[columns.level] || "Fácil",
         text: row[columns.text],
         options,
@@ -768,7 +1053,7 @@ function renderParentDashboard() {
   const results = getResults();
   lastScore.textContent = results[0] ? `${results[0].score}/10` : "--";
   roundCount.textContent = results.length;
-  bestSubject.textContent = getBestSubject(results);
+  renderSubjectRanking();
 
   if (!results.length) {
     resultsList.innerHTML = `<p class="empty-state">Nenhuma rodada respondida ainda.</p>`;
@@ -801,18 +1086,48 @@ function renderUnlockTimeSelect() {
 
 function formatUnlockTime(result) {
   if (!result.passed) return "Sem liberação";
-  return `${result.unlockMinutes || getUnlockMinutes()} min liberados`;
+  return `${formatMinutesLabel(result.unlockMinutes || getUnlockMinutes())} liberados`;
 }
 
-function getBestSubject(results) {
-  if (!results.length) return "--";
-  const counts = {};
-  results.forEach((result) => {
-    result.subjects.split(", ").forEach((subject) => {
-      counts[subject] = (counts[subject] || 0) + 1;
-    });
-  });
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+function getSubjectRanking() {
+  const selectedGrade = getSelectedGrade();
+  const yearPerformance = getPerformanceStore()[selectedGrade] || createPerformanceEntry();
+
+  return Object.entries(yearPerformance)
+    .map(([name, data]) => {
+      const total = Number(data.acertos || 0) + Number(data.erros || 0);
+      const score = total ? Math.round((Number(data.acertos || 0) / total) * 100) : 0;
+
+      return {
+        name,
+        score,
+        total,
+      };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return right.total - left.total;
+    })
+    .slice(0, 4);
+}
+
+function renderSubjectRanking() {
+  const ranking = getSubjectRanking();
+
+  if (!ranking.length) {
+    bestSubject.innerHTML = `<span class="subject-ranking-item">--</span>`;
+    return;
+  }
+
+  const focusName = ranking[ranking.length - 1]?.name;
+
+  bestSubject.innerHTML = ranking
+    .map((item, index) => {
+      const prefix = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}º`;
+      const isFocus = item.name === focusName;
+      return `<span class="subject-ranking-item${isFocus ? " subject-ranking-focus" : ""}">${prefix} ${item.name} — ${item.score}%${isFocus ? " ⚠️" : ""}</span>`;
+    })
+    .join("");
 }
 
 switchButtons.forEach((button) => {
@@ -890,18 +1205,20 @@ cancelPasswordButton.addEventListener("click", () => {
   hidePasswordGate();
 });
 
-openCountdownAppButton.addEventListener("click", () => {
-  const unlockedUntil = Number(localStorage.getItem("smartUnlockUnlockedUntil") || "0");
-  if (unlockedUntil <= Date.now()) return;
+if (openCountdownAppButton) {
+  openCountdownAppButton.addEventListener("click", () => {
+    const unlockedUntil = Number(localStorage.getItem("smartUnlockUnlockedUntil") || "0");
+    if (unlockedUntil <= Date.now()) return;
 
-  unlockMessage.textContent = `Parabéns! Você acertou todas as questões e ganhou mais ${getUnlockMinutes()} minutos de uso.`;
-  updateUnlockCountdown();
-  unlockedState.hidden = false;
-  if (unlockMessageTimerId) {
-    window.clearTimeout(unlockMessageTimerId);
-    unlockMessageTimerId = null;
-  }
-});
+    unlockMessage.textContent = `Você conseguiu! Agora você pode usar o celular por ${formatMinutesLabel(getUnlockMinutes())}. Use com cuidado 😉`;
+    updateUnlockCountdown();
+    unlockedState.hidden = false;
+    if (unlockMessageTimerId) {
+      window.clearTimeout(unlockMessageTimerId);
+      unlockMessageTimerId = null;
+    }
+  });
+}
 
 closeCountdownButton.addEventListener("click", () => {
   if (unlockMessageTimerId) {
@@ -914,6 +1231,7 @@ closeCountdownButton.addEventListener("click", () => {
 nextButton.addEventListener("click", submitAnswer);
 clearResultsButton.addEventListener("click", () => {
   localStorage.removeItem("smartUnlockResults");
+  localStorage.removeItem("smartUnlockPerformanceByYear");
   renderParentDashboard();
 });
 
@@ -924,6 +1242,7 @@ manualUnlockButton.addEventListener("click", () => {
 });
 
 stopTestButton.addEventListener("click", () => {
+  clearRetryRestartTimer();
   setTestModeEnabled(false);
   clearUnlockTimer();
   localStorage.removeItem("smartUnlockUnlockedUntil");
@@ -936,8 +1255,23 @@ stopTestButton.addEventListener("click", () => {
 studentGradeSelect.addEventListener("change", () => {
   localStorage.setItem("smartUnlockStudentGrade", studentGradeSelect.value);
   firestoreGradeCache.delete(studentGradeSelect.value);
+  roundQuestions = [];
+  currentIndex = 0;
+  correctCount = 0;
+  selectedAnswer = "";
+  answered = false;
+  retryPending = false;
+  retryQuestionMode = false;
+  refreshStudentGradePreview();
+  renderParentDashboard();
   if (isTestModeEnabled()) {
     startRound();
+  } else {
+    showIntroScreen(
+      "Tempo de uso pausado",
+      getIntroSubtitle(),
+      "Começar agora",
+    );
   }
 });
 
@@ -945,37 +1279,47 @@ unlockTimeSelect.addEventListener("change", () => {
   localStorage.setItem("smartUnlockMinutes", unlockTimeSelect.value);
 });
 
+importGradeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    pendingImportGrade = button.dataset.importGrade || "";
+    questionCsvInput.click();
+  });
+});
+
 questionCsvInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
-  if (!file) return;
+  if (!file || !pendingImportGrade) return;
 
   try {
-    let importedQuestions = [];
-
-    if (/\.(xlsx|xls)$/i.test(file.name)) {
-      const buffer = await file.arrayBuffer();
-      importedQuestions = importQuestionsFromWorkbook(buffer);
-    } else {
-      const text = await file.text();
-      importedQuestions = importQuestionsFromCsv(text);
-    }
+    const text = await file.text();
+    const importedQuestions = importQuestionsFromCsv(text, pendingImportGrade);
 
     if (!importedQuestions.length) {
       throw new Error("Nenhuma questão válida encontrada.");
     }
 
     const normalizedQuestions = ensureFourOptions(importedQuestions);
-    localStorage.setItem("smartUnlockQuestions", JSON.stringify(normalizedQuestions));
+    const questionBank = getStoredQuestionBank();
+    questionBank[pendingImportGrade] = normalizedQuestions.map((question) => ({
+      ...question,
+      grade: pendingImportGrade,
+      age: inferAgeFromGrade(pendingImportGrade),
+    }));
+    saveQuestionBank(questionBank);
     localStorage.setItem("smartUnlockQuestionsUpdatedAt", formatSyncDate());
     firestoreGradeCache.clear();
-    questions = normalizedQuestions;
-    renderQuestionBankStatus();
+    questions = loadQuestions();
+    questionBankStatus.textContent = `Questões do ${pendingImportGrade} Ano importadas com sucesso.`;
     if (isTestModeEnabled()) {
       startRound();
     }
   } catch (error) {
-    questionBankStatus.textContent = "Não consegui importar. Use CSV simples ou planilha XLSX com abas por ano.";
+    questionBankStatus.textContent =
+      error.message === "Arquivo inválido. Verifique o modelo CSV."
+        ? error.message
+        : "Arquivo inválido. Verifique o modelo CSV.";
   } finally {
+    pendingImportGrade = "";
     event.target.value = "";
   }
 });
@@ -1022,4 +1366,5 @@ renderParentDashboard();
 renderQuestionBankStatus();
 renderStudentGradeSelect();
 renderUnlockTimeSelect();
+refreshStudentGradePreview();
 runSplashScreen();

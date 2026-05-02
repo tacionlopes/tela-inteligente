@@ -47,61 +47,44 @@
 
         <section id="childView" class="view active" aria-label="Celular da criança">
           <div class="phone-frame">
-          <div class="phone-status">
-            <span>16:42</span>
-            <span>Wi-Fi 82%</span>
-          </div>
-
-          <div class="phone-content">
-            <button
-              id="openCountdownAppButton"
-              class="student-app-button"
-              type="button"
-              aria-label="Abrir Tela Inteligente"
-              title="Tela Inteligente"
-            >
-              <span class="brand-logo mini-app-logo" aria-hidden="true">
-                <span class="cap-top"></span>
-                <span class="cap-base"></span>
-                <span class="cap-tail"></span>
-              </span>
-            </button>
-          </div>
-
           <div id="educationGate" class="education-gate" role="dialog" aria-modal="true">
             <div class="step-line">
-              <span aria-hidden="true">←</span>
-              <span id="questionCounter" class="counter">Etapa 1 de 5</span>
+              <span id="questionCounter" class="counter">Progresso: 0/5</span>
+              <div class="score-pill"><span id="scoreLabel">0</span><span id="scoreSuffix">⭐</span></div>
             </div>
 
             <div class="gate-header">
-              <div class="gate-icon" aria-hidden="true">↑</div>
               <div>
                 <p id="gradeLabel" class="eyebrow">3º ano • 8 anos</p>
-                <h2>Desafio Escolar</h2>
+                <h2 id="gateTitle">Tempo de uso pausado</h2>
+                <p id="gateSubtitle" class="gate-subtitle">Responda 5 perguntas para liberar<br />o celular por 5 minutos</p>
               </div>
-              <div class="score-pill"><span id="scoreLabel">0</span>/10</div>
             </div>
 
             <div class="progress-track" aria-label="Progresso da rodada">
               <div id="progressBar" class="progress-bar"></div>
             </div>
 
+            <p id="supportText" class="support-text"></p>
             <h3 id="questionText" class="question">Quanto é 4 + 4?</h3>
 
             <div id="answerList" class="answer-list"></div>
 
             <div id="feedback" class="feedback" aria-live="polite"></div>
+            <div id="explanationBox" class="explanation-box" hidden></div>
 
-            <button id="nextButton" class="primary-button" disabled>Responder</button>
+            <div class="action-row">
+              <div class="gate-icon action-icon" aria-hidden="true">→</div>
+              <button id="nextButton" class="primary-button" disabled>Começar agora</button>
+            </div>
           </div>
 
           <div id="unlockedState" class="unlocked-state" hidden>
             <div class="gate-icon" aria-hidden="true">✓</div>
-            <h2>Tela liberada</h2>
-            <p id="unlockMessage">Parabéns, você ganhou tempo para continuar usando o celular.</p>
+            <h2>🎉 Parabéns!</h2>
+            <p id="unlockMessage">Você conseguiu! Agora você pode usar o celular por um tempo.</p>
             <p id="unlockCountdown" class="unlock-countdown"></p>
-            <button id="closeCountdownButton" class="primary-button">Fechar tela</button>
+            <button id="closeCountdownButton" class="primary-button">Usar agora</button>
           </div>
           </div>
         </section>
@@ -117,17 +100,19 @@
           </div>
 
           <div class="summary-grid">
-            <div class="metric">
-              <span>Última nota</span>
-              <strong id="lastScore">--</strong>
+            <div class="summary-stack">
+              <div class="metric">
+                <span>Última nota</span>
+                <strong id="lastScore">--</strong>
+              </div>
+              <div class="metric metric-compact">
+                <span>Rodadas</span>
+                <strong id="roundCount">0</strong>
+              </div>
             </div>
-            <div class="metric">
-              <span>Rodadas</span>
-              <strong id="roundCount">0</strong>
-            </div>
-            <div class="metric">
-              <span>Melhor matéria</span>
-              <strong id="bestSubject">--</strong>
+            <div class="metric metric-ranking">
+              <span>Desempenho por matéria</span>
+              <div id="bestSubject" class="subject-ranking">--</div>
             </div>
           </div>
 
@@ -151,6 +136,7 @@
               <p>Duração de uso após acertar tudo.</p>
             </div>
             <select id="unlockTimeSelect" aria-label="Tempo de tela liberada">
+              <option value="1">1 minuto</option>
               <option value="5">5 minutos</option>
               <option value="10">10 minutos</option>
               <option value="15">15 minutos</option>
@@ -162,11 +148,22 @@
           </div>
 
           <div class="import-panel">
-            <div class="import-actions">
-              <label class="file-button import-button">
-                Importar questões
-                <input id="questionCsvInput" type="file" accept=".csv,text/csv,.xlsx,.xls" />
-              </label>
+            <div class="import-buttons-container">
+              <button class="file-button import-button import-grade-button" type="button" data-import-grade="1º">
+                Importar questões do 1º ano
+              </button>
+              <button class="file-button import-button import-grade-button" type="button" data-import-grade="2º">
+                Importar questões do 2º ano
+              </button>
+              <button class="file-button import-button import-grade-button" type="button" data-import-grade="3º">
+                Importar questões do 3º ano
+              </button>
+              <button class="file-button import-button import-grade-button" type="button" data-import-grade="4º">
+                Importar questões do 4º ano
+              </button>
+              <button class="file-button import-button import-grade-button" type="button" data-import-grade="5º">
+                Importar questões do 5º ano
+              </button>
               <button id="manualUnlockButton" class="primary-button import-button" type="button">
                 Teste
               </button>
@@ -174,6 +171,7 @@
                 Parar Teste
               </button>
             </div>
+            <input id="questionCsvInput" type="file" accept=".csv,text/csv" hidden />
             <p id="questionBankStatus">Usando questões padrão do protótipo.</p>
           </div>
         </div>
