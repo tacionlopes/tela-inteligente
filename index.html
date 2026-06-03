@@ -5,10 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desbloqueio Inteligente</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="ai-api-config.js"></script>
+    <script>
+      window.__SMART_UNLOCK_OPTIONAL_LIBS__ = {
+        xlsx: "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+        firebaseApp: "https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js",
+        firebaseFirestore: "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore-compat.js",
+      };
+    </script>
   </head>
   <body>
     <div id="splashScreen" class="splash-screen" aria-hidden="true">
@@ -24,31 +29,124 @@
     <main class="app-shell">
       <div class="mobile-stage">
         <section class="topbar" aria-label="Navegação principal">
-          <div class="brand">
-            <div class="brand-logo" aria-hidden="true">
-              <span class="cap-top"></span>
-              <span class="cap-base"></span>
-              <span class="cap-tail"></span>
+          <div class="topbar-main">
+            <div class="brand">
+              <div class="brand-logo" aria-hidden="true">
+                <span class="cap-top"></span>
+                <span class="cap-base"></span>
+                <span class="cap-tail"></span>
+              </div>
+              <h1>Desbloqueio Inteligente</h1>
             </div>
-            <h1>Tela Inteligente</h1>
+            <div class="topbar-actions">
+              <div class="topbar-avatar" aria-hidden="true">👧</div>
+              <button
+                id="profileMenuButton"
+                class="menu-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="profileMenuPanel"
+                aria-label="Abrir menu do cadastro"
+              >
+                <span></span>
+                <span></span>
+                <span></span>
+              </button>
+            </div>
           </div>
           <div class="view-switch" role="tablist" aria-label="Alternar visão">
-            <button class="switch-button active" data-view="child" role="tab" aria-selected="true">
-              Aluno
-            </button>
-            <button class="switch-button" data-view="history" role="tab" aria-selected="false">
-              Histórico
-            </button>
-            <button class="switch-button" data-view="parent" role="tab" aria-selected="false">
+            <button class="switch-button active" data-view="parent" role="tab" aria-selected="true">
               Responsável
             </button>
           </div>
+          <div id="profileMenuOverlay" class="menu-modal-overlay" hidden></div>
+          <div id="profileMenuPanel" class="menu-panel menu-summary-panel" hidden>
+            <div class="menu-summary-card">
+              <div id="openSummaryButton" class="menu-summary-link menu-summary-link--primary menu-summary-heading" aria-hidden="true">
+                Avaliação Geral
+              </div>
+              <div class="menu-summary-metrics">
+                <p class="menu-summary-line"><span class="menu-summary-label--strong">Data:</span> <strong id="menuSummaryDate">--/--/----</strong></p>
+                <p class="menu-summary-line"><span class="menu-summary-label--strong">Tempo de Uso:</span> <strong id="menuSummaryTime"></strong></p>
+                <p class="menu-summary-line"><span class="menu-summary-label--strong">Rodadas:</span> <strong id="menuSummaryRounds"></strong></p>
+          <p class="menu-summary-line"><span class="menu-summary-label--strong">Melhor desempenho:</span> <strong id="menuSummaryBest"></strong></p>
+                <p class="menu-summary-line"><span class="menu-summary-label--strong">Precisa melhorar:</span> <strong id="menuSummaryNeeds"></strong></p>
+                <p class="menu-summary-line"><span class="menu-summary-label--strong">Foco:</span> <strong id="menuSummaryFocus"></strong></p>
+              </div>
+              <div class="menu-summary-divider" aria-hidden="true"></div>
+              <div class="menu-summary-links">
+                <button id="openAiVersionButton" class="menu-summary-link menu-summary-link--secondary" type="button">
+                  <span class="menu-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M12 3l1.8 4.7L18.5 9l-4 2.8L15.9 17L12 14.3L8.1 17l1.4-5.2L5.5 9l4.7-1.3Z"></path>
+                    </svg>
+                  </span>
+                  <span>Versão IA</span>
+                </button>
+                <button id="openStandardVersionButton" class="menu-summary-link menu-summary-link--secondary" type="button">
+                  <span class="menu-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M5 6.5h14"></path>
+                      <path d="M5 12h14"></path>
+                      <path d="M5 17.5h14"></path>
+                    </svg>
+                  </span>
+                  <span>Versão Normal</span>
+                </button>
+                <button id="openPlansButton" class="menu-summary-link menu-summary-link--secondary" type="button">
+                  <span class="menu-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <rect x="3" y="5" width="18" height="14" rx="2.5"></rect>
+                      <path d="M3 10.5h18"></path>
+                      <path d="M7 15h4"></path>
+                    </svg>
+                  </span>
+                  <span>Planos e Assinatura</span>
+                </button>
+                <button id="openSupportButton" class="menu-summary-link menu-summary-link--secondary" type="button">
+                  <span class="menu-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <circle cx="12" cy="8" r="3"></circle>
+                      <path d="M6 18c0-2.6 2.7-4.5 6-4.5s6 1.9 6 4.5"></path>
+                      <path d="M4.5 17c.2-1.5 1.4-2.7 3-3.4"></path>
+                      <path d="M19.5 17c-.2-1.5-1.4-2.7-3-3.4"></path>
+                    </svg>
+                  </span>
+                  <span>Atendimento</span>
+                </button>
+                <button id="profileMenuExitButton" class="menu-summary-link menu-summary-link--secondary" type="button">
+                  <span>Sair do aplicativo</span>
+                  <span class="menu-summary-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M14 7l5 5l-5 5"></path>
+                      <path d="M9 12h10"></path>
+                      <path d="M11 5H5v14h6"></path>
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="profileDetailsPanel" class="menu-panel" hidden></div>
         </section>
 
         <section id="childView" class="view active" aria-label="Celular da criança">
           <div class="phone-frame">
           <div id="educationGate" class="education-gate" role="dialog" aria-modal="true">
-            <div class="step-line">
+            <button
+              id="welcomeInfoButton"
+              class="welcome-info-button"
+              type="button"
+              aria-label="Como o aplicativo funciona"
+              aria-describedby="welcomeInfoTooltip"
+              aria-expanded="false"
+            >
+              <span class="welcome-info-icon" aria-hidden="true">i</span>
+              <span id="welcomeInfoTooltip" class="welcome-info-tooltip" role="tooltip">
+                O responsável escolhe o tempo de uso. Se definir 10 minutos, a cada 10 minutos o aplicativo abre um teste com 5 perguntas. Ao acertar todas sem errar, o celular é liberado por mais 10 minutos. Se errar uma questão, o teste recomeça. O celular só será liberado quando todas as perguntas forem respondidas corretamente. Esse ciclo continua até o responsável encerrar.
+              </span>
+            </button>
+            <div id="stepLine" class="step-line">
               <span id="questionCounter" class="counter">Progresso: 0/5</span>
               <div class="score-pill"><span id="scoreLabel">0</span><span id="scoreSuffix">⭐</span></div>
             </div>
@@ -61,121 +159,219 @@
               </div>
             </div>
 
-            <div class="progress-track" aria-label="Progresso da rodada">
+            <div id="progressTrack" class="progress-track" aria-label="Progresso da rodada">
               <div id="progressBar" class="progress-bar"></div>
             </div>
 
             <p id="supportText" class="support-text"></p>
             <h3 id="questionText" class="question">Quanto é 4 + 4?</h3>
+            <p id="welcomeStartLink" class="welcome-start-link" hidden>Vamos Começar</p>
+            <div id="welcomeActionPanel" class="welcome-action-panel" hidden>
+              <div class="student-panel welcome-student-panel">
+                <div>
+                  <h3>Liberar Tempo</h3>
+                  <p>O responsável escolhe o tempo de uso. Se definir 10 minutos, a cada 10 minutos o aplicativo abre um teste com 5 perguntas. Ao acertar todas sem errar, o celular é liberado por mais 10 minutos. Se errar uma questão, o teste recomeça. O celular só será liberado quando todas as perguntas forem respondidas corretamente. Esse ciclo continua até o responsável encerrar.</p>
+                </div>
+                <select id="welcomeUnlockTimeSelect" aria-label="Tempo de tela liberada na tela inicial">
+                  <option value="1">1 minuto</option>
+                  <option value="5">5 minutos</option>
+                  <option value="10">10 minutos</option>
+                  <option value="15">15 minutos</option>
+                  <option value="20">20 minutos</option>
+                  <option value="30">30 minutos</option>
+                  <option value="45">45 minutos</option>
+                  <option value="60">60 minutos</option>
+                </select>
+              </div>
+
+              <div class="student-panel welcome-student-panel">
+                <div>
+                  <h3>Ano do aluno</h3>
+                  <p>As questões dos Teste são equivalentes ao ano letivo do aluno.</p>
+                </div>
+                <select id="welcomeGradeSelect" aria-label="Ano escolar do aluno na tela inicial">
+                  <option value="3º">3º ano</option>
+                  <option value="4º">4º ano</option>
+                  <option value="5º">5º ano</option>
+                </select>
+              </div>
+
+              <div class="student-panel welcome-student-panel welcome-stop-panel">
+                <p class="welcome-stop-instructions">
+                  Para encerrar o teste, clique em Responsável no menu. No final da página, clique em Parar Teste.
+                </p>
+              </div>
+
+              <button id="welcomeApplyTestButton" class="primary-button welcome-apply-button" type="button">Aplicar Teste</button>
+            </div>
 
             <div id="answerList" class="answer-list"></div>
 
             <div id="feedback" class="feedback" aria-live="polite"></div>
             <div id="explanationBox" class="explanation-box" hidden></div>
 
-            <div class="action-row">
-              <div class="gate-icon action-icon" aria-hidden="true">→</div>
+            <div id="actionRow" class="action-row">
+              <button
+                id="testLogoutButton"
+                class="test-logout-button"
+                type="button"
+                aria-label="Sair do teste"
+                title="Sair do teste"
+              >
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"></path>
+                  <path d="M14 8l4 4-4 4"></path>
+                  <path d="M18 12H9"></path>
+                </svg>
+              </button>
               <button id="nextButton" class="primary-button" disabled>Começar agora</button>
             </div>
           </div>
 
           <div id="unlockedState" class="unlocked-state" hidden>
-            <div class="gate-icon" aria-hidden="true">✓</div>
-            <h2>🎉 Parabéns!</h2>
-            <p id="unlockMessage">Você conseguiu! Agora você pode usar o celular por um tempo.</p>
-            <p id="unlockCountdown" class="unlock-countdown"></p>
-            <button id="closeCountdownButton" class="primary-button">Usar agora</button>
+            <div class="unlock-award-card">
+              <div class="unlock-award-icon" aria-hidden="true">✓</div>
+              <p class="unlock-award-eyebrow">Tempo liberado</p>
+              <h2>Parabéns!</h2>
+              <p id="unlockMessage" class="unlock-award-message">Você conseguiu! Agora você pode usar o celular por um tempo.</p>
+              <p id="unlockCountdown" class="unlock-countdown"></p>
+              <button id="closeCountdownButton" class="primary-button">Usar agora</button>
+            </div>
           </div>
           </div>
         </section>
 
         <section id="parentView" class="view" aria-label="Painel dos responsáveis">
-          <div class="dashboard">
-          <div class="dashboard-header">
-            <div>
-              <p class="eyebrow">Espelho dos responsáveis</p>
-              <h2>Resultados recebidos</h2>
+          <div class="dashboard parent-dashboard-home">
+            <div class="build-marker build-marker--parent">VERSAO NOVA • ANDROID-2</div>
+            <div class="parent-hero">
+              <h2 id="parentGreeting" class="parent-greeting">Vamos Começar</h2>
             </div>
-            <button id="clearResultsButton" class="secondary-button">Limpar</button>
-          </div>
 
-          <div class="summary-grid">
-            <div class="summary-stack">
+            <div class="parent-subjects-panel">
+              <div id="bestSubject" class="subject-ranking subject-toggle-list">--</div>
+            </div>
+
+            <div class="parent-select-stack">
+              <div class="parent-select-shell parent-select-shell--indigo prototype-grade-shell" aria-label="Ano escolar do Fundamental I">
+                <button id="studentGradePrototypeTrigger" class="prototype-grade-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  Fundamental I
+                </button>
+                <div id="studentGradePrototypeMenu" class="prototype-grade-menu" hidden></div>
+                <select id="studentGradeDisplay" aria-label="Ano escolar do Fundamental I">
+                  <option value="3º">3º ano</option>
+                  <option value="4º">4º ano</option>
+                  <option value="5º">5º ano</option>
+                </select>
+              </div>
+
+              <div class="parent-select-shell parent-select-shell--orange prototype-grade-upper-shell" aria-label="Ano escolar do Fundamental II">
+                <button id="studentGradeUpperPrototypeTrigger" class="prototype-grade-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  Fundamental II
+                </button>
+                <div id="studentGradeUpperPrototypeMenu" class="prototype-grade-menu prototype-grade-menu--orange" hidden></div>
+                <select id="studentGradeDisplayUpper" aria-label="Ano escolar do Fundamental II">
+                  <option value="6º">6º ano</option>
+                  <option value="7º">7º ano</option>
+                  <option value="8º">8º ano</option>
+                  <option value="9º">9º ano</option>
+                </select>
+              </div>
+
+              <div class="parent-select-shell parent-select-shell--violet prototype-time-shell" aria-label="Tempo de uso do celular">
+                <button id="unlockTimePrototypeTrigger" class="prototype-grade-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  Tempo de uso do celular
+                </button>
+                <div id="unlockTimePrototypeMenu" class="prototype-grade-menu prototype-grade-menu--violet" hidden></div>
+                <select id="unlockTimeSelect" aria-label="Tempo de uso do celular">
+                  <option value="1">1 minuto</option>
+                  <option value="10">10 minutos</option>
+                  <option value="20">20 minutos</option>
+                  <option value="30">30 minutos</option>
+                  <option value="40">40 minutos</option>
+                  <option value="60">60 minutos</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="import-panel post-login-actions">
+              <div class="import-buttons-container">
+                <button id="importCurrentGradeButton" class="file-button import-button" type="button">
+                  Importar Questões
+                </button>
+                <div id="questionBankPreviewShell" class="question-bank-preview-shell">
+                  <button
+                    id="questionBankPreviewButton"
+                    class="file-button import-preview-button"
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-label="Ver questões importadas"
+                  >
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M7 4h7l4 4v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+                      <path d="M14 4v4h4"></path>
+                      <path d="M12 11a3.5 3.5 0 1 1 0 7a3.5 3.5 0 0 1 0-7z"></path>
+                      <path d="M15 17l2 2"></path>
+                    </svg>
+                  </button>
+                </div>
+                <input id="questionFileInput" type="file" accept=".csv,text/csv" multiple hidden />
+                </div>
+              <div id="questionBankPreviewPanel" class="question-bank-preview-panel" hidden role="dialog" aria-label="Questões importadas">
+                <div class="question-bank-preview-card">
+                  <div id="questionBankPreviewTitle" class="question-bank-preview-title">
+                    <span class="question-bank-preview-title__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <rect x="4" y="4" width="5" height="5"></rect>
+                        <rect x="11.5" y="4" width="5" height="5"></rect>
+                        <rect x="4" y="11.5" width="5" height="5"></rect>
+                        <rect x="11.5" y="11.5" width="5" height="5"></rect>
+                      </svg>
+                    </span>
+                    <span id="questionBankPreviewTitleText">Questões Importadas</span>
+                  </div>
+                  <p id="questionBankPreviewContent" class="question-bank-preview-content">Nenhuma questão importada ainda.</p>
+                </div>
+              </div>
+              <p id="questionBankStatus">Usando questões padrão do protótipo.</p>
+            </div>
+
+            <div class="apply-test-panel">
+              <p class="apply-test-label">Aplicar Teste</p>
+              <button id="manualUnlockButton" class="apply-test-toggle" type="button" aria-label="Aplicar teste" aria-pressed="false">
+                <span class="apply-test-toggle__thumb" aria-hidden="true"></span>
+              </button>
+            </div>
+
+            <button id="stopTestButton" class="parent-stop-button" type="button">Parar Teste</button>
+
+            <div class="parent-hidden-tools" hidden aria-hidden="true">
+              <button id="clearResultsButton" class="secondary-button">Limpar</button>
               <div class="metric">
                 <span>Última nota</span>
                 <strong id="lastScore">--</strong>
               </div>
               <div class="metric metric-compact">
-                <span>Rodadas</span>
+                <span>Testes Concluídos</span>
                 <strong id="roundCount">0</strong>
               </div>
-            </div>
-            <div class="metric metric-ranking">
-              <span>Desempenho por matéria</span>
-              <div id="bestSubject" class="subject-ranking">--</div>
+              <div class="student-panel access-panel">
+                <div>
+                  <h3>Acesso de teste</h3>
+                  <p id="accessStatusHint">Controle se este cadastro pode entrar no aplicativo.</p>
+                  <strong id="accessProfileValue" class="access-profile-value">Cadastro atual: --</strong>
+                  <strong id="accessStatusValue" class="access-status-value">Acesso liberado</strong>
+                </div>
+                <div class="access-actions">
+                  <button id="accessToggleButton" class="secondary-button access-toggle-button" type="button">
+                    Desativar acesso
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div class="student-panel">
-            <div>
-              <h3>Ano do aluno</h3>
-              <p>As próximas rodadas usam questões deste ano.</p>
-            </div>
-            <select id="studentGradeSelect" aria-label="Ano escolar do aluno">
-              <option value="1º">1º ano</option>
-              <option value="2º">2º ano</option>
-              <option value="3º">3º ano</option>
-              <option value="4º">4º ano</option>
-              <option value="5º">5º ano</option>
-            </select>
-          </div>
-
-          <div class="student-panel">
-            <div>
-              <h3>Tempo liberado</h3>
-              <p>Duração de uso após acertar tudo.</p>
-            </div>
-            <select id="unlockTimeSelect" aria-label="Tempo de tela liberada">
-              <option value="1">1 minuto</option>
-              <option value="5">5 minutos</option>
-              <option value="10">10 minutos</option>
-              <option value="15">15 minutos</option>
-              <option value="20">20 minutos</option>
-              <option value="30">30 minutos</option>
-              <option value="45">45 minutos</option>
-              <option value="60">60 minutos</option>
-            </select>
-          </div>
-
-          <div class="import-panel">
-            <div class="import-buttons-container">
-              <button class="file-button import-button import-grade-button" type="button" data-import-grade="1º">
-                Importar questões do 1º ano
-              </button>
-              <button class="file-button import-button import-grade-button" type="button" data-import-grade="2º">
-                Importar questões do 2º ano
-              </button>
-              <button class="file-button import-button import-grade-button" type="button" data-import-grade="3º">
-                Importar questões do 3º ano
-              </button>
-              <button class="file-button import-button import-grade-button" type="button" data-import-grade="4º">
-                Importar questões do 4º ano
-              </button>
-              <button class="file-button import-button import-grade-button" type="button" data-import-grade="5º">
-                Importar questões do 5º ano
-              </button>
-              <button id="manualUnlockButton" class="primary-button import-button" type="button">
-                Teste
-              </button>
-              <button id="stopTestButton" class="secondary-button import-button" type="button">
-                Parar Teste
-              </button>
-            </div>
-            <input id="questionCsvInput" type="file" accept=".csv,text/csv" hidden />
-            <p id="questionBankStatus">Usando questões padrão do protótipo.</p>
-          </div>
-        </div>
-      </section>
+        </section>
 
         <section id="historyView" class="view" aria-label="Histórico de resultados">
           <div class="dashboard">
@@ -184,7 +380,7 @@
               <p class="eyebrow">Histórico</p>
               <h2>Rodadas respondidas</h2>
             </div>
-            <button class="secondary-button" data-view-target="parent">Voltar</button>
+            <button id="historyCloseButton" class="menu-panel-close" type="button" aria-label="Fechar histórico">Fechar</button>
           </div>
 
           <div class="results-panel">
@@ -192,33 +388,329 @@
           </div>
           </div>
         </section>
+
+        <section id="responsibleEntryView" class="view responsible-entry-view" aria-label="Entrada do responsável">
+          <div class="responsible-entry-screen">
+            <div class="responsible-entry-brand">
+              <div class="brand-logo responsible-entry-logo" aria-hidden="true">
+                <span class="cap-top"></span>
+                <span class="cap-base"></span>
+                <span class="cap-tail"></span>
+              </div>
+              <h2>Desbloqueio Inteligente</h2>
+            </div>
+
+            <div class="responsible-entry-copy">
+              <p class="responsible-entry-hello">Olá</p>
+              <p class="responsible-entry-message">Você chegou para ajudar e acompanhar mais um dia de aprendizado.</p>
+            </div>
+
+            <div class="responsible-entry-illustration" aria-hidden="true">
+              <img src="assets/responsible-entry-illustration.png" alt="" />
+            </div>
+
+            <div class="responsible-entry-access">
+              <div class="responsible-entry-access-row">
+                <div class="responsible-entry-access-main">
+                  <input
+                    id="responsibleEntryPasswordInput"
+                    class="responsible-entry-password"
+                    type="password"
+                    inputmode="text"
+                    placeholder="Senha"
+                    aria-label="Senha do responsável"
+                  />
+                  <div class="responsible-entry-label-row">
+                    <p class="responsible-entry-label">Tela do Responsável</p>
+                    <button
+                      id="responsibleEntryUnlockButton"
+                      class="responsible-entry-unlock"
+                      type="button"
+                      aria-label="Abrir tela do responsável"
+                    >
+                      <img src="assets/responsible-entry-unlock-icon.png" alt="" />
+                    </button>
+                  </div>
+                  <p id="responsibleEntryError" class="responsible-entry-error" aria-live="polite"></p>
+                </div>
+              </div>
+            </div>
+
+            <button id="responsibleEntryExitButton" class="responsible-entry-exit" type="button">
+              <span>Sair do aplicativo</span>
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M14 7l5 5l-5 5"></path>
+                <path d="M9 12h10"></path>
+                <path d="M11 5H5v14h6"></path>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <section id="testStatusView" class="view test-status-view" aria-label="Teste em andamento">
+          <div class="test-status-screen">
+            <div class="test-status-brand">
+              <div class="brand-logo test-status-logo" aria-hidden="true">
+                <span class="cap-top"></span>
+                <span class="cap-base"></span>
+                <span class="cap-tail"></span>
+              </div>
+              <h2>Desbloqueio Inteligente</h2>
+            </div>
+
+            <div class="test-status-content">
+              <p class="test-status-message">O teste está em andamento, só o responsável pode parar o teste.</p>
+              <p id="testStatusCountdown" class="test-status-countdown">Próximo teste em 0:00</p>
+            </div>
+
+            <button id="testStatusStopButton" class="test-status-stop-button" type="button">Parar Teste</button>
+          </div>
+        </section>
+
+        <div id="setupWarningOverlay" class="setup-warning-overlay" hidden></div>
+        <div id="setupWarningModal" class="setup-warning-modal" hidden role="dialog" aria-modal="true" aria-labelledby="setupWarningTitle">
+          <div class="setup-warning-modal__icon" aria-hidden="true">!</div>
+          <h3 id="setupWarningTitle" class="setup-warning-modal__title">Ajuste necessário</h3>
+          <p id="setupWarningMessage" class="setup-warning-modal__message"></p>
+          <button id="setupWarningConfirmButton" class="setup-warning-modal__button" type="button">OK</button>
+        </div>
+        <div id="aiGenerationOverlay" class="setup-warning-overlay" hidden></div>
+        <div id="aiGenerationModal" class="ai-generation-modal" hidden role="dialog" aria-modal="true" aria-labelledby="aiGenerationTitle">
+          <div class="ai-generation-modal__icon" aria-hidden="true">
+            <img
+              class="ai-generation-modal__symbol"
+              src="assets/login-logo-symbol-light.png"
+              alt=""
+              aria-hidden="true"
+            />
+          </div>
+          <h3 id="aiGenerationTitle" class="ai-generation-modal__title">Gerar Questões com IA</h3>
+          <p class="ai-generation-modal__message">
+            Escolha como a Versão IA deve montar as questões para o ano e as matérias já selecionadas.
+          </p>
+          <div class="ai-generation-summary">
+            <p class="ai-generation-summary__line"><span class="ai-generation-summary__label">Ano:</span> <strong id="aiGenerationGrade" class="ai-generation-summary__value">--</strong></p>
+            <p class="ai-generation-summary__line"><span class="ai-generation-summary__label">Matérias:</span> <strong id="aiGenerationSubjects" class="ai-generation-summary__value">--</strong></p>
+            <p class="ai-generation-summary__line"><span class="ai-generation-summary__label">Tempo de uso:</span> <strong id="aiGenerationUnlockTime" class="ai-generation-summary__value">--</strong></p>
+          </div>
+          <label class="ai-generation-field" for="aiGenerationCount">
+            <span>Quantidade de questões</span>
+            <div class="ai-generation-count-shell" aria-label="Quantidade de questões">
+              <button
+                id="aiGenerationCountTrigger"
+                class="ai-generation-count-trigger"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                5 questões
+              </button>
+              <div id="aiGenerationCountMenu" class="ai-generation-count-menu" hidden></div>
+              <select id="aiGenerationCount" hidden>
+                <option value="5">5 questões</option>
+                <option value="10">10 questões</option>
+                <option value="15">15 questões</option>
+              </select>
+            </div>
+          </label>
+          <div class="ai-generation-field ai-generation-field--checkboxes" aria-label="Tipos de questão">
+            <span>Tipos de questão</span>
+            <label class="ai-generation-checkbox">
+              <input id="aiGenerationTypeChoice" type="checkbox" />
+              <span>Múltipla escolha</span>
+            </label>
+            <label class="ai-generation-checkbox">
+              <input id="aiGenerationTypeText" type="checkbox" />
+              <span>Dissertativas</span>
+            </label>
+          </div>
+          <label class="ai-generation-field" for="aiGenerationKnowledge">
+            <span>Conhecimento-base</span>
+            <p class="ai-generation-field__help">
+              Se escolher uma matéria, escreva um tema direto. Se escolher mais de uma, use uma linha por matéria.
+              Ex.: Geografia: clima e relevo. Biologia: sistema respiratório.
+            </p>
+            <textarea
+              id="aiGenerationKnowledge"
+              rows="4"
+              placeholder="Uma matéria: Sistema digestório. Mais de uma: Geografia: clima e relevo&#10;Biologia: sistema respiratório"
+            ></textarea>
+          </label>
+          <div class="ai-generation-actions">
+            <button id="aiGenerationCancelButton" class="test-logout-secondary" type="button">Cancelar</button>
+            <button id="aiGenerationContinueButton" class="setup-warning-modal__button" type="button">Continuar</button>
+          </div>
+        </div>
       </div>
 
-      <div id="passwordGate" class="password-gate" hidden role="dialog" aria-modal="true">
-        <form id="passwordForm" class="password-card">
-          <div class="brand-logo password-logo" aria-hidden="true">
-            <span class="cap-top"></span>
-            <span class="cap-base"></span>
-            <span class="cap-tail"></span>
+      <div id="initialSetupGate" class="password-gate setup-gate register-gate-screen" hidden role="dialog" aria-modal="true">
+        <form id="initialSetupForm" class="password-card setup-card register-screen">
+          <div class="register-screen__brand">
+            <img
+              class="register-screen__logo"
+              src="assets/login-logo-symbol-light.png"
+              alt="Logo Desbloqueio Inteligente"
+            />
+            <h1 class="register-screen__brand-name">Desbloqueio Inteligente</h1>
           </div>
-          <h2>Área do responsável</h2>
-          <label for="parentPasswordInput">Senha</label>
-          <input
-            id="parentPasswordInput"
-            type="password"
-            inputmode="numeric"
-            autocomplete="current-password"
-            placeholder="Digite a senha"
-          />
-          <p id="passwordError" class="password-error" aria-live="polite"></p>
-          <div class="password-actions">
-            <button type="button" id="cancelPasswordButton" class="secondary-button">Cancelar</button>
-            <button type="submit" class="primary-button">Entrar</button>
+
+          <div class="register-screen__card">
+            <div class="register-screen__fields">
+              <input
+                id="responsibleNameInput"
+                class="register-screen__input"
+                type="text"
+                autocomplete="name"
+                placeholder="Nome do responsável"
+              />
+
+              <input
+                id="responsibleEmailInput"
+                class="register-screen__input"
+                type="email"
+                autocomplete="email"
+                placeholder="e-mail"
+              />
+
+              <input
+                id="studentNameInput"
+                class="register-screen__input"
+                type="text"
+                autocomplete="given-name"
+                placeholder="Nome do aluno"
+              />
+
+              <select id="setupGradeSelect" class="register-screen__select" aria-label="Ano letivo">
+                <option value="">Ano letivo</option>
+                <option value="3º">3º ano</option>
+                <option value="4º">4º ano</option>
+                <option value="5º">5º ano</option>
+                <option value="6º">6º ano</option>
+                <option value="7º">7º ano</option>
+                <option value="8º">8º ano</option>
+                <option value="9º">9º ano</option>
+              </select>
+
+              <input
+                id="setupPasswordInput"
+                class="register-screen__input"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Senha"
+              />
+
+              <input
+                id="setupPasswordConfirmInput"
+                class="register-screen__input"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Confirmar Senha"
+              />
+            </div>
+
+            <p id="initialSetupError" class="password-error register-screen__error" aria-live="polite"></p>
+            <button type="submit" class="register-screen__submit">Salvar Cadastro</button>
+            <button type="button" id="backToLoginFromSetupButton" class="register-screen__back-link">Voltar para login</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="loginGate" class="password-gate setup-gate login-gate-screen" hidden role="dialog" aria-modal="true">
+        <form id="loginForm" class="password-card setup-card login-screen">
+          <div class="build-marker build-marker--login">VERSAO NOVA • ANDROID-2</div>
+          <div class="login-screen__brand">
+            <img
+              class="login-screen__logo"
+              src="assets/login-logo-symbol-light.png"
+              alt="Logo Desbloqueio Inteligente"
+            />
+            <h1 class="login-screen__brand-name">Desbloqueio Inteligente</h1>
+          </div>
+
+          <div class="login-screen__hero">
+            <h2 class="login-screen__headline">
+              <span class="login-screen__headline-line">
+                <span class="login-screen__headline-word login-screen__headline-word--orange">Estudou.</span>
+                <span class="login-screen__headline-word login-screen__headline-word--violet">Aprendeu.</span>
+              </span>
+              <span class="login-screen__headline-line">
+                <span class="login-screen__headline-word login-screen__headline-word--green">Celular liberado.</span>
+              </span>
+            </h2>
+            <p class="password-description login-screen__description">Controle parental educativo</p>
+          </div>
+
+          <div class="login-screen__form">
+            <p id="loginRecognizedHint" class="login-screen__recognized-hint" hidden></p>
+            <input
+              id="loginEmailInput"
+              class="login-screen__input"
+              type="email"
+              autocomplete="email"
+              placeholder="e-mail"
+            />
+
+            <input
+              id="loginPasswordInput"
+              class="login-screen__input"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Senha"
+            />
+
+            <p id="loginError" class="password-error login-screen__error" aria-live="polite"></p>
+            <button type="submit" class="login-screen__submit">Entrar</button>
+
+            <button type="button" class="login-screen__google-button">
+              <span class="login-screen__google-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48" focusable="false" aria-hidden="true">
+                  <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.2 36 24 36c-6.627 0-12-5.373-12-12S17.373 12 24 12c3.059 0 5.842 1.155 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                  <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 16.108 18.961 12 24 12c3.059 0 5.842 1.155 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4c-7.682 0-14.347 4.337-17.694 10.691z"/>
+                  <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.193l-6.19-5.238C29.143 35.091 26.715 36 24 36c-5.179 0-9.62-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+                  <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.048 12.048 0 0 1-4.084 5.569l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                </svg>
+              </span>
+              <span>Entrar com o Google</span>
+            </button>
+
+            <button type="button" id="openSetupFromLoginButton" class="login-screen__create-link">Faça seu Cadastro</button>
           </div>
         </form>
       </div>
     </main>
 
+    <div id="unlockAwardOverlay" class="unlock-award-overlay" hidden>
+      <div id="unlockAwardState" class="unlocked-state unlock-award-standalone" hidden>
+        <div class="unlock-award-card unlock-award-card--clean">
+          <div class="unlock-award-icon" aria-hidden="true">!</div>
+          <h2>Parabéns</h2>
+          <p id="unlockAwardMessage" class="unlock-award-message">Você ganhou tempo de uso do celular.</p>
+          <p id="unlockAwardCountdown" class="unlock-countdown"></p>
+          <button id="unlockAwardActionButton" class="primary-button unlock-award-action">USAR AGORA</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="testLogoutOverlay" class="setup-warning-overlay" hidden></div>
+    <div id="testLogoutModal" class="setup-warning-modal test-logout-modal" hidden role="dialog" aria-modal="true" aria-labelledby="testLogoutTitle">
+      <div class="setup-warning-modal__icon" aria-hidden="true">!</div>
+      <h3 id="testLogoutTitle" class="setup-warning-modal__title">Senha do responsável</h3>
+      <p class="setup-warning-modal__message">Para sair do teste, digite a senha do responsável.</p>
+      <input
+        id="testLogoutPasswordInput"
+        class="test-logout-input"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Senha do responsável"
+      />
+      <p id="testLogoutError" class="password-error test-logout-error" aria-live="polite"></p>
+      <div class="test-logout-actions">
+        <button id="testLogoutCancelButton" class="test-logout-secondary" type="button">Cancelar</button>
+        <button id="testLogoutConfirmButton" class="setup-warning-modal__button" type="button">Sair</button>
+      </div>
+    </div>
+
+    <script src="data/question-bank.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

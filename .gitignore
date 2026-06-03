@@ -7,5 +7,10 @@
 dist/
 .vercel/
 *.zip
-tela-inteligente-web/
-tela-inteligente-web-1/
+exports/
+.vercel
+
+.codex/
+.idea/
+.android-sync/
+.tmp_OverlayService.kt

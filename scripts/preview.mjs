@@ -2,9 +2,13 @@ import { createServer } from "node:http";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const rootDir = resolve(fileURLToPath(new URL("../dist", import.meta.url)));
+const sourceRootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.PORT || 4173);
+const require = createRequire(import.meta.url);
+const generateQuestionsHandler = require(join(sourceRootDir, "api/ai/generate-questions.js"));
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -15,6 +19,11 @@ const contentTypes = {
 };
 
 const server = createServer((request, response) => {
+  if (request.url === "/api/ai/generate-questions") {
+    generateQuestionsHandler(request, response);
+    return;
+  }
+
   const requestPath = request.url === "/" ? "/index.html" : request.url || "/index.html";
   const safePath = normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(rootDir, safePath);

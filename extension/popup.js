@@ -112,6 +112,38 @@ function normalizeHeader(header) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeGradeLabel(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/([1-5])\s*(?:o|º)?/i);
+  return match ? `${match[1]}º` : text;
+}
+
+function inferAgeFromGrade(grade) {
+  const normalizedGrade = normalizeGradeLabel(grade);
+  const ageByGrade = {
+    "1º": 6,
+    "2º": 7,
+    "3º": 8,
+    "4º": 9,
+    "5º": 10,
+  };
+  return ageByGrade[normalizedGrade] || 8;
+}
+
+function inferSubjectFromQuestion(text) {
+  const questionText = String(text || "").toLowerCase();
+  if (/[+\-x÷*/=]|\bquanto\b|\bresultado\b|\bmultiplo\b|\bmetade\b|\bn[uú]mero\b/.test(questionText)) {
+    return "Matemática";
+  }
+  if (/\bpalavra\b|\bverbo\b|\bplural\b|\brima\b|\bletra\b/.test(questionText)) {
+    return "Português";
+  }
+  if (/\blado\b|\bmaior\b|\boposto\b|\bdepois\b|\bsequencia\b|\blogica\b/.test(questionText)) {
+    return "Lógica";
+  }
+  return "Ciências";
+}
+
 function importQuestionsFromCsv(text) {
   const rows = parseCsv(text);
   const headers = rows[0]?.map(normalizeHeader) || [];
@@ -133,8 +165,6 @@ function importQuestionsFromCsv(text) {
 
   const requiredColumns = [
     columns.grade,
-    columns.age,
-    columns.subject,
     columns.text,
     columns.optionA,
     columns.optionB,
@@ -154,10 +184,12 @@ function importQuestionsFromCsv(text) {
         options.push(row[columns.optionD]);
       }
 
+      const normalizedGrade = normalizeGradeLabel(row[columns.grade]);
+
       return {
-        grade: row[columns.grade],
-        age: Number(row[columns.age]),
-        subject: row[columns.subject],
+        grade: normalizedGrade,
+        age: columns.age === undefined ? inferAgeFromGrade(normalizedGrade) : Number(row[columns.age] || inferAgeFromGrade(normalizedGrade)),
+        subject: columns.subject === undefined ? inferSubjectFromQuestion(row[columns.text]) : row[columns.subject] || inferSubjectFromQuestion(row[columns.text]),
         level: row[columns.level] || "Fácil",
         text: row[columns.text],
         options,

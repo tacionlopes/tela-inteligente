@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import "./generate-question-bank.mjs";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(rootDir, "dist");
@@ -9,6 +10,8 @@ const entriesToCopy = [
   "index.html",
   "styles.css",
   "app.js",
+  "ai-api-config.js",
+  "assets",
   "firebase-config.js",
   "firebase-config.example.js",
   "data"
