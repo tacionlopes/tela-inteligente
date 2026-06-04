@@ -59,12 +59,20 @@ const AI_GENERATED_QUESTIONS_SCHEMA = {
 
 function sendJson(response, statusCode, payload) {
   if (typeof response.status === "function") {
+    if (typeof response.setHeader === "function") {
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
     return response.status(statusCode).json(payload);
   }
 
   response.statusCode = statusCode;
   if (typeof response.setHeader === "function") {
     response.setHeader("Content-Type", "application/json; charset=utf-8");
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   }
   response.end(JSON.stringify(payload));
 }
@@ -163,6 +171,17 @@ async function callOpenAiGenerateQuestions({ request, prompt }) {
 }
 
 async function handler(request, response) {
+  if (request.method === "OPTIONS") {
+    if (typeof response.setHeader === "function") {
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+
   if (request.method !== "POST") {
     return sendJson(response, 405, {
       error: "method_not_allowed",
