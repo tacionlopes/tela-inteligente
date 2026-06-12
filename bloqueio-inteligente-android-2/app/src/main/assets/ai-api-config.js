@@ -3,5 +3,5 @@ window.DESBLOQUEIO_INTELIGENTE_AI_CONFIG = {
   baseUrl: "https://desbloqueio-inteligente-app.vercel.app",
   generateQuestionsPath: "/api/ai/generate-questions",
   generateStudyPath: "/api/ai/generate-study-explanation",
-  timeoutMs: 30000,
+  timeoutMs: 120000,
 };
