@@ -1658,11 +1658,15 @@ ${hasKnowledgeBase ? request.knowledgeBase : "(não informado)"}
 
 Instruções obrigatórias:
 - Mantenha o texto original do conteúdo como base.
-- Faça a explicação abordando os principais pontos do conteúdo.
+- Faça uma explicação resumida, abordando apenas os principais pontos do conteúdo.
 - Use linguagem fácil.
-- Faça a explicação detalhada, sem resumo final.
+- Não faça uma explicação longa.
 - Evite termos técnicos; quando aparecerem, explique em linguagem simples.
-- Organize a resposta em etapas claras.
+- Organize a resposta em etapas claras e curtas.
+- A introdução deve ter no máximo 2 frases curtas.
+- A seção "steps" deve ter entre 3 e 5 etapas curtas.
+- Cada etapa deve ir direto ao ponto, sem desenvolver demais.
+- O exemplo visual deve ser curto e simples.
 - Use as informações do conteúdo digitado, das imagens enviadas e conhecimento web estritamente alinhado ao tema e ao ano escolar.
 - Se alguma informação não estiver no material enviado e também não puder ser sustentada com segurança pelo conteúdo alinhado ao tema, diga exatamente: "Essa informação não está no material enviado".
 - Não fuja das matérias selecionadas.
@@ -1716,13 +1720,12 @@ function buildSimulatedStudyGuidedExplanation(payload) {
     explanation: {
       intro: `Vamos estudar ${subjectLabel || "o conteúdo selecionado"} a partir do material enviado. O tema central identificado foi: ${firstTopic}.`,
       steps: [
-        "1. Primeiro, observe o assunto principal que aparece no conteúdo enviado.",
-        "2. Depois, identifique os pontos mais importantes e o que cada um quer dizer em linguagem simples.",
-        "3. Em seguida, conecte esses pontos com a matéria escolhida e com o ano escolar selecionado.",
-        "4. Por fim, revise a ideia principal para entender como esse conteúdo se organiza.",
+        "1. Identifique o assunto principal do conteúdo enviado.",
+        "2. Separe os pontos mais importantes em linguagem simples.",
+        "3. Relacione esses pontos com a matéria e o ano escolar escolhidos.",
       ],
       visualExample: knowledgeText
-        ? `Exemplo visual simples: imagine um quadro com o título "${firstTopic}" e, abaixo, os principais pontos separados em etapas curtas.`
+        ? `Exemplo visual simples: imagine um quadro com o título "${firstTopic}" e 3 tópicos curtos logo abaixo.`
         : "Essa informação não está no material enviado",
     },
   };
