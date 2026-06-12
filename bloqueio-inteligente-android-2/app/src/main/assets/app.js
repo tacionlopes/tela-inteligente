@@ -5293,6 +5293,23 @@ function removeStudyGuidedUploadPreviewImage(indexToRemove) {
   setStudyGuidedUploadPreview(nextImages);
 }
 
+function normalizeStudyGuidedStep(step) {
+  return String(step || "")
+    .trim()
+    .replace(/^\d+[\).\-\s]+/, "")
+    .replace(/^\d+\s*[\.\-]\s*/, "")
+    .trim();
+}
+
+function formatStudyGuidedParagraphs(text) {
+  return String(text || "")
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("");
+}
+
 function renderStudyGuidedExplanation() {
   if (!studyGuidedExplanationPanel || !studyGuidedExplanationBody) return;
 
@@ -5304,27 +5321,43 @@ function renderStudyGuidedExplanation() {
     return;
   }
 
-  const intro = escapeHtml(studyGuidedExplanationState.explanation.intro || "Essa informação não está no material enviado");
+  const introHtml = formatStudyGuidedParagraphs(
+    studyGuidedExplanationState.explanation.intro || "Essa informação não está no material enviado",
+  );
   const steps = Array.isArray(studyGuidedExplanationState.explanation.steps)
-    ? studyGuidedExplanationState.explanation.steps.filter(Boolean)
+    ? studyGuidedExplanationState.explanation.steps
+      .map(normalizeStudyGuidedStep)
+      .filter(Boolean)
     : [];
-  const visualExample = escapeHtml(
+  const visualExampleHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.visualExample || "Essa informação não está no material enviado",
   );
   const sourceLabel = studyGuidedExplanationState.source === "api" ? "API" : "Simulação";
   const errorMessage = studyGuidedExplanationState.errorMessage
-    ? `<p><strong>Falha da API:</strong> ${escapeHtml(studyGuidedExplanationState.errorMessage)}</p>`
+    ? `
+      <section class="study-guided-explanation-section study-guided-explanation-section--warning">
+        <h4 class="study-guided-explanation-section-title">Falha da API</h4>
+        <p>${escapeHtml(studyGuidedExplanationState.errorMessage)}</p>
+      </section>
+    `
     : "";
 
   studyGuidedExplanationBody.innerHTML = `
-    <p><strong>Origem:</strong> ${sourceLabel}</p>
-    <p>${intro}</p>
-    <p><strong>Explicação passo a passo</strong></p>
-    <ol>
-      ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
-    </ol>
-    <p><strong>Exemplo visual</strong></p>
-    <p>${visualExample}</p>
+    <p class="study-guided-explanation-source"><strong>Origem:</strong> ${sourceLabel}</p>
+    <section class="study-guided-explanation-section">
+      <h4 class="study-guided-explanation-section-title">Explicação</h4>
+      ${introHtml}
+    </section>
+    <section class="study-guided-explanation-section">
+      <h4 class="study-guided-explanation-section-title">Explicação passo a passo</h4>
+      <ol class="study-guided-explanation-steps">
+        ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+      </ol>
+    </section>
+    <section class="study-guided-explanation-section">
+      <h4 class="study-guided-explanation-section-title">Exemplo visual</h4>
+      ${visualExampleHtml}
+    </section>
     ${errorMessage}
   `;
 }
