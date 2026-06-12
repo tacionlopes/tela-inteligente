@@ -5265,6 +5265,41 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Não foi possível preparar a imagem enviada."));
+    image.src = dataUrl;
+  });
+}
+
+async function optimizeStudyGuidedImage(file) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageElement(originalDataUrl);
+  const maxDimension = 1280;
+  const longestSide = Math.max(image.naturalWidth || image.width || 0, image.naturalHeight || image.height || 0) || 1;
+  const scale = Math.min(1, maxDimension / longestSide);
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width || 1) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height || 1) * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return originalDataUrl;
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.78);
+  return compressedDataUrl.length < originalDataUrl.length ? compressedDataUrl : originalDataUrl;
+}
+
 function isImageFile(file) {
   if (!file) return false;
 
@@ -7447,7 +7482,7 @@ if (questionFileInput) {
         }
 
         const selectedImages = validImages.slice(0, remainingSlots);
-        const imageDataUrls = await Promise.all(selectedImages.map((file) => readFileAsDataUrl(file)));
+        const imageDataUrls = await Promise.all(selectedImages.map((file) => optimizeStudyGuidedImage(file)));
         setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, ...imageDataUrls]);
         prototypeImportStatusMessage = "";
         if (questionBankStatus) {
