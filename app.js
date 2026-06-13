@@ -5760,14 +5760,14 @@ function setStudyGuidedAudioButtonState() {
 function buildStudyGuidedAudioText(section) {
   if (!studyGuidedExplanationState?.explanation) return "";
 
-  const clampAudioText = (rawText, maxLength = 520) =>
+  const clampAudioText = (rawText, maxLength = 420) =>
     String(rawText || "")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, maxLength);
 
   if (section === "intro") {
-    return clampAudioText(studyGuidedExplanationState.explanation.intro || "", 420);
+    return clampAudioText(studyGuidedExplanationState.explanation.intro || "", 300);
   }
 
   if (section === "steps") {
@@ -5776,15 +5776,15 @@ function buildStudyGuidedAudioText(section) {
       : [];
     return clampAudioText(
       steps
-        .slice(0, 3)
+        .slice(0, 2)
         .map((step, index) => `Passo ${index + 1}. ${step}`)
         .join(" "),
-      620,
+      380,
     );
   }
 
   if (section === "example") {
-    return clampAudioText(studyGuidedExplanationState.explanation.visualExample || "", 420);
+    return clampAudioText(studyGuidedExplanationState.explanation.visualExample || "", 300);
   }
 
   return "";

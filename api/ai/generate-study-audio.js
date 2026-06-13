@@ -2,7 +2,7 @@ const OPENAI_TTS_API_URL = "https://api.openai.com/v1/audio/speech";
 const DEFAULT_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 const DEFAULT_TTS_VOICE = process.env.OPENAI_TTS_VOICE || "alloy";
 const MAX_STUDY_AUDIO_CHARACTERS = 900;
-const OPENAI_TTS_TIMEOUT_MS = 15000;
+const OPENAI_TTS_TIMEOUT_MS = 30000;
 
 function setCorsHeaders(response) {
   if (typeof response.setHeader !== "function") return;
