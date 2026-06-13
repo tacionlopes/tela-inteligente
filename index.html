@@ -70,7 +70,7 @@
                       <path d="M12 3l1.9 4.6L19 9.5l-3.8 3.2L16.3 18L12 15.4 7.7 18l1.1-5.3L5 9.5l5.1-1.9z"></path>
                     </svg>
                   </span>
-                  <span>Estudo Guiado</span>
+                  <span>Desbloqueio</span>
                 </button>
                 <button id="openTestsDashboardButton" class="menu-summary-link menu-summary-link--secondary" type="button" aria-pressed="false">
                   <span class="menu-summary-icon" aria-hidden="true">
@@ -324,14 +324,12 @@
               <label class="ai-generation-field ai-generation-field--knowledge" for="aiDashboardKnowledge">
                 <span>Conteúdo da Matéria</span>
                 <span class="ai-generation-field__help">
-                  Se escolher uma matéria, escreva um tema direto.<br />
-                  Se escolher mais de uma, use uma linha por matéria.<br />
-                  Ex.: Geografia: clima e relevo. Biologia: sistema respiratório.
+                  Escreva o conteúdo para estudo de acordo com a matéria escolhida ou faça o upload das imagens do conteúdo. Você pode carregar até três imagens do conteúdo.
                 </span>
                 <textarea
                   id="aiDashboardKnowledge"
                   rows="5"
-                  placeholder="Uma matéria: Sistema digestório. Mais de uma: Geografia: clima e relevo&#10;Biologia: sistema respiratório"
+                  placeholder="Escreva o conteúdo ou tema da matéria"
                 ></textarea>
               </label>
             </div>
@@ -414,14 +412,6 @@
               </div>
             </div>
 
-            <button id="parentDashboardBackButton" class="parent-dashboard-back-button" type="button" aria-label="Voltar para tela do responsável">
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M13.5 7.5 9 12l4.5 4.5"></path>
-              </svg>
-              <span>Voltar</span>
-            </button>
-
             <button id="stopTestButton" class="parent-stop-button" type="button">Parar Teste</button>
 
             <div class="parent-hidden-tools" hidden aria-hidden="true">
@@ -483,7 +473,7 @@
               <p class="responsible-entry-message">Aprender é desbloquear<br />novas possibilidades.</p>
             </div>
 
-            <section class="responsible-entry-assessment" aria-label="Avaliação do último teste">
+            <section class="responsible-entry-assessment" aria-label="Avaliação do último teste" hidden>
               <h3 class="responsible-entry-assessment__title">Avaliação do último Teste</h3>
 
               <div class="responsible-entry-assessment__rows">
@@ -666,14 +656,12 @@
           <label class="ai-generation-field" for="aiGenerationKnowledge">
             <span>Conhecimento</span>
             <p class="ai-generation-field__help">
-              Se escolher uma matéria, escreva um tema direto.<br />
-              Se escolher mais de uma, use uma linha por matéria.<br />
-              Ex.: Geografia: clima e relevo. Biologia: sistema respiratório.
+              Escreva o conteúdo para estudo de acordo com a matéria escolhida ou faça o upload das imagens do conteúdo. Você pode carregar até três imagens do conteúdo.
             </p>
             <textarea
               id="aiGenerationKnowledge"
               rows="4"
-              placeholder="Uma matéria: Sistema digestório. Mais de uma: Geografia: clima e relevo&#10;Biologia: sistema respiratório"
+              placeholder="Escreva o conteúdo ou tema da matéria"
             ></textarea>
           </label>
           <div class="ai-generation-actions">

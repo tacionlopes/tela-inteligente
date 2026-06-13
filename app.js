@@ -65,6 +65,10 @@ Sua tarefa é gerar questões educacionais em JSON, seguindo EXATAMENTE o format
 Regras obrigatórias:
 - Responder apenas com JSON válido.
 - Não escrever explicações fora do JSON.
+- Antes de finalizar qualquer texto, faça uma revisão gramatical completa.
+- Corrija ortografia, acentuação, pontuação, vírgulas, concordância verbal, concordância nominal e fluidez.
+- Não deixe sair nenhum texto truncado, duro, telegráfico ou com aparência de rascunho.
+- Escreva com padrão alto de português, como material didático muito bem revisado.
 - Respeitar exatamente:
   - ano escolar
   - matérias
@@ -113,6 +117,10 @@ const activeSessionEmailStorageKey = "smartUnlockActiveSessionEmail";
 const cycleActiveStorageKey = "smartUnlockCycleActive";
 const forceResumeTestStorageKey = "smartUnlockForceResumeTest";
 const bypassLoginReturnStorageKey = "smartUnlockBypassLoginReturnOnce";
+const lastActiveViewStorageKey = "smartUnlockLastActiveView";
+const activeRuntimeSessionStorageKey = "smartUnlockActiveRuntimeSession";
+const recognizedLoginProfileStorageKey = "smartUnlockRecognizedLoginProfile";
+let appBootCompleted = false;
 const defaultResponsibleEmail = "tacionlopes@gmail.com";
 const defaultResponsibleName = "Rose";
 const defaultStudentName = "Lau";
@@ -368,6 +376,10 @@ let prototypeSelectionsInitialized = false;
 let prototypeTimeExplicitlySelected = false;
 let responsibleEntryAuthorized = false;
 let fileImportPickerActive = false;
+let studyGuidedAudioPlayer = null;
+let studyGuidedAudioObjectUrl = "";
+let studyGuidedAudioLoadingSection = "";
+let studyGuidedAudioPlayedSections = new Set();
 const studyGuidedUploadPreviewStorageKey = "smartUnlockStudyGuidedUploadPreview";
 const studyGuidedExplanationStorageKey = "smartUnlockStudyGuidedExplanation";
 let studyGuidedUploadPreviewDataUrls = parseStudyGuidedUploadPreviewStorage(
@@ -573,6 +585,45 @@ function getCurrentProfileEmail() {
   return getProfileDocId(getInitialSetup()?.responsibleEmail);
 }
 
+function getRecognizedLoginProfile() {
+  const setup = getInitialSetup();
+  const setupEmail = getProfileDocId(setup?.responsibleEmail || "");
+  if (setupEmail) {
+    return {
+      responsibleName: String(setup?.responsibleName || "").trim(),
+      responsibleEmail: setupEmail,
+    };
+  }
+
+  try {
+    const savedProfile = JSON.parse(localStorage.getItem(recognizedLoginProfileStorageKey) || "null");
+    const savedEmail = getProfileDocId(savedProfile?.responsibleEmail || "");
+    if (!savedEmail) return null;
+    return {
+      responsibleName: String(savedProfile?.responsibleName || "").trim(),
+      responsibleEmail: savedEmail,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeRecognizedLoginProfile(profile = {}) {
+  const responsibleEmail = getProfileDocId(profile?.responsibleEmail || "");
+  if (!responsibleEmail) {
+    localStorage.removeItem(recognizedLoginProfileStorageKey);
+    return;
+  }
+
+  localStorage.setItem(
+    recognizedLoginProfileStorageKey,
+    JSON.stringify({
+      responsibleName: String(profile?.responsibleName || "").trim(),
+      responsibleEmail,
+    }),
+  );
+}
+
 function getParentDashboardMode() {
   return localStorage.getItem(parentDashboardModeStorageKey) === "study-guided"
     ? "study-guided"
@@ -612,6 +663,51 @@ function storeActiveSessionEmail(email) {
 
 function clearActiveSessionEmail() {
   localStorage.removeItem(activeSessionEmailStorageKey);
+  localStorage.removeItem(lastActiveViewStorageKey);
+}
+
+function hasActiveRuntimeSession() {
+  try {
+    if (sessionStorage.getItem(activeRuntimeSessionStorageKey) === "true") {
+      return true;
+    }
+  } catch (_error) {
+    // no-op
+  }
+
+  try {
+    return localStorage.getItem(activeRuntimeSessionStorageKey) === "true";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function markActiveRuntimeSession() {
+  try {
+    sessionStorage.setItem(activeRuntimeSessionStorageKey, "true");
+  } catch (_error) {
+    // no-op
+  }
+
+  try {
+    localStorage.setItem(activeRuntimeSessionStorageKey, "true");
+  } catch (_error) {
+    // no-op
+  }
+}
+
+function clearActiveRuntimeSession() {
+  try {
+    sessionStorage.removeItem(activeRuntimeSessionStorageKey);
+  } catch (_error) {
+    // no-op
+  }
+
+  try {
+    localStorage.removeItem(activeRuntimeSessionStorageKey);
+  } catch (_error) {
+    // no-op
+  }
 }
 
 function setBypassLoginReturnOnce() {
@@ -624,6 +720,33 @@ function consumeBypassLoginReturnOnce() {
     localStorage.removeItem(bypassLoginReturnStorageKey);
   }
   return shouldBypass;
+}
+
+function getStoredLastActiveView() {
+  const storedView = String(localStorage.getItem(lastActiveViewStorageKey) || "").trim();
+  if (["parent", "child", "history", "dashboard-selector", "test-status"].includes(storedView)) {
+    return storedView;
+  }
+  return "";
+}
+
+function storeLastActiveView(view) {
+  if (["parent", "child", "history", "dashboard-selector", "test-status"].includes(view)) {
+    localStorage.setItem(lastActiveViewStorageKey, view);
+    return;
+  }
+  localStorage.removeItem(lastActiveViewStorageKey);
+}
+
+function getSessionReturnView() {
+  const storedView = getStoredLastActiveView();
+  if (storedView) {
+    return storedView;
+  }
+  if (dashboardSelectorView) {
+    return "dashboard-selector";
+  }
+  return responsibleEntryView ? "responsible-entry" : "parent";
 }
 
 function clearActiveProfileSubscription() {
@@ -689,6 +812,10 @@ function applyRemoteProfileSnapshot(snapshot) {
       createdAt: snapshot.createdAt || new Date().toISOString(),
     }),
   );
+  storeRecognizedLoginProfile({
+    responsibleName: snapshot.responsibleName || "",
+    responsibleEmail: snapshot.responsibleEmail,
+  });
 
   if (snapshot.parentPassword) {
     localStorage.setItem(parentPasswordStorageKey, snapshot.parentPassword);
@@ -1359,6 +1486,7 @@ function renderAiDashboardConfig() {
   const aiVersionEnabled = isAiVersionModeEnabled();
   aiDashboardConfig.hidden = !aiVersionEnabled;
   if (!aiVersionEnabled) return;
+  const parentDashboardMode = getParentDashboardMode();
 
   const selectedGrade = normalizeGradeLabel(getSelectedGrade());
   const selectedSubjects = getActiveSubjectsForGrade(selectedGrade);
@@ -1384,7 +1512,9 @@ function renderAiDashboardConfig() {
     aiDashboardTypeText.checked = shouldReuseDraft ? Boolean(draft.questionTypes?.text) : false;
   }
   if (aiDashboardKnowledge) {
-    aiDashboardKnowledge.value = shouldReuseDraft ? draft.knowledge : "";
+    aiDashboardKnowledge.value = parentDashboardMode === "study-guided"
+      ? getStudyGuidedKnowledge()
+      : (shouldReuseDraft ? draft.knowledge : "");
   }
 }
 
@@ -1506,6 +1636,7 @@ function getAiApiConfig() {
     baseUrl: String(rawConfig.baseUrl || "").trim(),
     generateQuestionsPath: String(rawConfig.generateQuestionsPath || "/api/ai/generate-questions").trim() || "/api/ai/generate-questions",
     generateStudyPath: String(rawConfig.generateStudyPath || "/api/ai/generate-study-explanation").trim() || "/api/ai/generate-study-explanation",
+    generateStudyAudioPath: String(rawConfig.generateStudyAudioPath || "/api/ai/generate-study-audio").trim() || "/api/ai/generate-study-audio",
     timeoutMs: Math.max(1000, Number(rawConfig.timeoutMs || 30000)),
   };
 }
@@ -1524,6 +1655,14 @@ function getAiGenerateStudyUrl(config = getAiApiConfig()) {
   }
 
   return new URL(config.generateStudyPath, config.baseUrl).toString();
+}
+
+function getAiGenerateStudyAudioUrl(config = getAiApiConfig()) {
+  if (!config.baseUrl) {
+    return config.generateStudyAudioPath;
+  }
+
+  return new URL(config.generateStudyAudioPath, config.baseUrl).toString();
 }
 
 async function requestAiGeneratedQuestions(payload) {
@@ -1617,6 +1756,15 @@ function getStudyGuidedSelectionState() {
     };
   }
 
+  if (activeSubjects.length > 1) {
+    return {
+      ok: false,
+      message: "No Estudo Guiado, faça um estudo por vez. Escolha apenas uma matéria para gerar a explicação.",
+      grade: selectedGrade,
+      subjects: activeSubjects,
+    };
+  }
+
   return {
     ok: true,
     message: "",
@@ -1639,12 +1787,144 @@ function buildStudyGuidedRequest(selectionState = getStudyGuidedSelectionState()
   };
 }
 
+const studyGuidedSubjectKeywordHints = {
+  "Português": ["substantivo", "verbo", "adjetivo", "oração", "crase", "pontuação", "concordância", "acentuação", "interpretação", "texto"],
+  "História": ["guerra", "império", "colônia", "revolução", "independência", "idade média", "presidente", "ditadura", "povo antigo", "civilização"],
+  "Geografia": ["mapa", "território", "clima", "relevo", "vegetação", "hidrografia", "continente", "população", "urbanização", "paisagem"],
+  "Biologia": ["coração", "célula", "corpo humano", "sistema digestório", "respiração", "órgão", "ser vivo", "genética", "ecossistema", "fotossíntese"],
+  "Química": ["átomo", "átomos", "molécula", "moléculas", "elemento químico", "tabela periódica", "reação química", "mistura", "substância", "ligação química"],
+  "Física": ["força", "movimento", "energia", "velocidade", "gravidade", "massa", "aceleração", "eletricidade", "circuito", "ondas"],
+  "Inglês": ["verb to be", "simple present", "simple past", "present continuous", "english", "inglês", "vocabulary", "reading", "listening"],
+  "Artes": ["pintura", "escultura", "teatro", "música", "dança", "obra de arte", "artista", "cores", "desenho", "cinema"],
+};
+
+function detectStudyGuidedLikelySubjectFromText(rawText) {
+  const text = String(rawText || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (!text) return "";
+
+  let bestSubject = "";
+  let bestScore = 0;
+
+  Object.entries(studyGuidedSubjectKeywordHints).forEach(([subjectLabel, keywords]) => {
+    const score = keywords.reduce((total, keyword) => {
+      const normalizedKeyword = keyword
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      return total + (text.includes(normalizedKeyword) ? 1 : 0);
+    }, 0);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSubject = subjectLabel;
+    }
+  });
+
+  return bestScore > 0 ? bestSubject : "";
+}
+
+function isStudyGuidedTextTooVague(rawText) {
+  const normalizedText = String(rawText || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalizedText) return true;
+
+  const words = normalizedText.split(" ").filter(Boolean);
+  if (words.length < 2) return true;
+
+  return normalizedText.length < 12;
+}
+
+function validateStudyGuidedContentForSelectedSubject(selectionState) {
+  const selectedSubjects = Array.isArray(selectionState?.subjects) ? selectionState.subjects : [];
+  if (selectedSubjects.length !== 1) {
+    return {
+      ok: false,
+      message: "No Estudo Guiado, faça um estudo por vez. Escolha apenas uma matéria para gerar a explicação.",
+    };
+  }
+
+  const selectedSubjectLabel = getSubjectDisplayLabel(selectedSubjects[0]);
+  const knowledgeText = getStudyGuidedKnowledge();
+  const hasUploadedImages = studyGuidedUploadPreviewDataUrls.length > 0;
+
+  if (!knowledgeText && !hasUploadedImages) {
+    return {
+      ok: false,
+      message: "No Estudo Guiado, escreva o conteúdo da matéria ou envie ao menos uma imagem antes de clicar em Gerar Estudo.",
+    };
+  }
+
+  if (knowledgeText) {
+    const detectedSubject = detectStudyGuidedLikelySubjectFromText(knowledgeText);
+    if (detectedSubject && detectedSubject !== selectedSubjectLabel) {
+      return {
+        ok: false,
+        message: "O conteúdo não corresponde à matéria escolhida. No Estudo Guiado, escolha uma única matéria por vez e envie um conteúdo alinhado a ela.",
+      };
+    }
+
+    if (!detectedSubject && !hasUploadedImages && isStudyGuidedTextTooVague(knowledgeText)) {
+      return {
+        ok: false,
+        message: "O conteúdo enviado é inválido para a matéria escolhida. Escreva um tema real da matéria para gerar o estudo.",
+      };
+    }
+  }
+
+  return { ok: true, message: "" };
+}
+
+function compactStudyGuidedKnowledge(rawText) {
+  const cleaned = String(rawText || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join("\n")
+    .trim();
+
+  if (!cleaned) return "";
+
+  return cleaned.length > 420
+    ? `${cleaned.slice(0, 417).trim()}...`
+    : cleaned;
+}
+
+function buildStudyGuidedTeacherPersona(request) {
+  if (!request) return "";
+
+  const subjectLabels = Array.isArray(request.subjects)
+    ? request.subjects.map((subject) => getSubjectDisplayLabel(subject)).filter(Boolean)
+    : [];
+
+  const gradeLabel = request.grade ? `${request.grade}º ano` : "ano selecionado";
+
+  if (!subjectLabels.length) {
+    return `Atue como um(a) professor(a) do ${gradeLabel}, com linguagem simples, passo a passo e foco total no material enviado.`;
+  }
+
+  if (subjectLabels.length === 1) {
+    return `Atue como um(a) professor(a) de ${subjectLabels[0]} do ${gradeLabel}, ensinando como em sala de aula: fala fluida, didática clara, linguagem simples, excelente gramática, pontuação impecável, boa concordância, analogias úteis e foco total na compreensão real da aluna.`;
+  }
+
+  return `Atue como os(as) professores(as) das matérias ${subjectLabels.join(", ")} do ${gradeLabel}, tratando cada explicação de acordo com a matéria correspondente, com fala fluida, didática clara, linguagem simples, excelente gramática, pontuação impecável, boa concordância, analogias úteis e foco total na compreensão real da aluna.`;
+}
+
 function buildStudyGuidedUserPrompt(request) {
   if (!request) return "";
 
   const subjectLabels = request.subjects.map((subject) => getSubjectDisplayLabel(subject)).join(", ");
-  const hasKnowledgeBase = Boolean(request.knowledgeBase);
-  const hasUploadedImages = request.uploadedImages.length > 0;
+  const compactKnowledge = compactStudyGuidedKnowledge(request.knowledgeBase);
+  const hasKnowledgeBase = Boolean(compactKnowledge);
+  const teacherPersona = buildStudyGuidedTeacherPersona(request);
 
   return `Você vai explicar um conteúdo escolar para uma aluna que está vendo esse assunto pela primeira vez.
 
@@ -1652,24 +1932,59 @@ Contexto:
 - Ano: ${request.grade} ano
 - Etapa: ${request.gradeGroup}
 - Matéria(s): ${subjectLabels}
-- Texto digitado em "Conteúdo da Matéria":
-${hasKnowledgeBase ? request.knowledgeBase : "(não informado)"}
+- Perfil docente obrigatório: ${teacherPersona}
+- Texto digitado em "Conteúdo da Matéria" (recorte principal):
+${hasKnowledgeBase ? compactKnowledge : "(não informado)"}
 - Quantidade de imagens enviadas: ${request.uploadedImages.length}
 
 Instruções obrigatórias:
+- Antes de explicar, valide se a resposta está coerente com o ano e com a(s) matéria(s) selecionada(s).
+- Quando a matéria e o ano forem definidos, trate essa combinação como obrigatória em toda a resposta.
+- Faça essa validação internamente.
+- Não escreva na resposta frases como "esse conteúdo é coerente com..." ou "está adequado ao ano...".
+- A seção "intro" deve começar explicando diretamente o conteúdo enviado, em vez de comentar a validação.
+- Se o conteúdo digitado for "Coração", por exemplo, a intro deve resumir o que é o coração.
+- Se o conteúdo vier por imagem, a intro deve resumir o tema principal identificado na imagem.
 - Mantenha o texto original do conteúdo como base.
-- Faça uma explicação resumida, abordando apenas os principais pontos do conteúdo.
+- Faça uma explicação abrangente o suficiente para garantir entendimento real do conteúdo.
+- Priorize os pontos mais importantes e explique o que realmente precisa ser compreendido.
 - Use linguagem fácil.
-- Não faça uma explicação longa.
 - Evite termos técnicos; quando aparecerem, explique em linguagem simples.
-- Organize a resposta em etapas claras e curtas.
-- A introdução deve ter no máximo 2 frases curtas.
-- A seção "steps" deve ter entre 3 e 5 etapas curtas.
-- Cada etapa deve ir direto ao ponto, sem desenvolver demais.
-- O exemplo visual deve ser curto e simples.
+- Garanta boa gramática, boa concordância e frases naturais em toda a resposta.
+- Faça revisão final obrigatória de ortografia, acentuação, vírgulas, pontuação e concordância antes de responder.
+- Não deixe nenhum trecho com aparência de rascunho, frase solta, quebra estranha ou construção mal acabada.
+- Use um tom didático, claro, humano e fluido, como um(a) professor(a) explicando em sala para alunos que estão vendo o assunto pela primeira vez.
+- Organize a resposta em etapas claras e progressivas.
+- A introdução deve explicar o conteúdo com naturalidade, sem começar com frases como "o texto mostra", "o conteúdo mostra" ou "o material mostra".
+- A seção "steps" deve ter apenas a quantidade de etapas realmente necessária para o entendimento.
+- Faça internamente um cálculo de importância textual: se o conteúdo exigir mais desenvolvimento, aumente os passos; se exigir menos, reduza.
+- Normalmente use entre 3 e 6 etapas.
+- Cada etapa deve desenvolver uma ideia importante com clareza e de forma enxuta.
+- Prefira uma frase por etapa. Use duas apenas quando for realmente necessário.
+- Evite blocos longos dentro de um mesmo passo.
+- Quando uma ideia puder ser dita com menos palavras sem perder entendimento, escolha a forma mais curta.
+- Evite repetir o que já foi explicado na introdução.
+- Cada passo deve ir direto ao ponto.
+- O exemplo deve ajudar o aluno a visualizar ou sentir o conteúdo em uma situação real da vida.
+- Ensine como um(a) professor(a) da matéria selecionada para o ano escolhido.
+- Quando houver exercícios, conduza a explicação como quem também resolve exercícios da matéria escolhida.
+- Quando quiser facilitar a compreensão, use analogias, comparações simples e situações reais do dia a dia.
+- Preserve esse mesmo perfil pedagógico mesmo quando o conteúdo vier por imagem.
 - Use as informações do conteúdo digitado, das imagens enviadas e conhecimento web estritamente alinhado ao tema e ao ano escolar.
 - Se alguma informação não estiver no material enviado e também não puder ser sustentada com segurança pelo conteúdo alinhado ao tema, diga exatamente: "Essa informação não está no material enviado".
 - Não fuja das matérias selecionadas.
+- Antes de gerar a explicação, valide se o conteúdo digitado ou a imagem enviada realmente correspondem à matéria selecionada.
+- Se não corresponderem, marque metadata.isCompatible como false.
+- Quando metadata.isCompatible for false, preencha metadata.incompatibilityMessage com: "A matéria escolhida e o conteúdo enviado não correspondem. No Estudo Guiado, escolha uma única matéria por vez e envie um conteúdo alinhado a ela."
+- Quando metadata.isCompatible for false, não invente explicação; devolva intro, steps e visualExample vazios.
+- Considere incompatível quando o tema central apontar claramente para outra matéria. Exemplos: átomos, moléculas e reações -> Química; força, energia e movimento -> Física; guerras, revoluções e impérios -> História; mapas, clima e relevo -> Geografia; coração, células e órgãos -> Biologia.
+- O último passo deve funcionar como um fechamento bem estruturado do conteúdo já explicado.
+- Não transforme esse fechamento em exercício, pergunta, atividade ou checklist.
+- Não escreva a palavra "conclusão", mas faça esse fechamento soar natural e útil para fixação do entendimento.
+- A seção "visualExample" deve funcionar apenas como um campo "Exemplo".
+- Não use wireframe, setas, esquemas de lousa ou diagramas textuais.
+- Nesse campo, explique o conteúdo em uma situação real da vida, usando analogias, comparações e exemplos simples que facilitem o entendimento.
+- Responda com profundidade suficiente para ensinar bem, mas sem exagerar em repetição.
 - Retorne apenas JSON válido.
 
 Formato obrigatório:
@@ -1679,7 +1994,9 @@ Formato obrigatório:
     "subjects": ["string"],
     "generatedAt": "ISO-8601 string",
     "usedKnowledgeBase": true,
-    "usedImages": 0
+    "usedImages": 0,
+    "isCompatible": true,
+    "incompatibilityMessage": ""
   },
   "explanation": {
     "intro": "string",
@@ -1696,7 +2013,7 @@ function buildStudyGuidedPayload(selectionState = getStudyGuidedSelectionState()
   return {
     request,
     prompt: {
-      system: "Você é uma IA educacional que explica conteúdos escolares com clareza, fidelidade ao material enviado e linguagem simples.",
+      system: "Você é uma IA educacional que explica conteúdos escolares com clareza, fidelidade ao material enviado e linguagem simples. Sempre valide a matéria e o ano escolar selecionados antes de responder e atue como professor(a) correspondente a essa combinação. Faça essa validação internamente e nunca use a introdução para falar da validação; a introdução deve começar explicando diretamente o conteúdo enviado. Escreva com ótima gramática, excelente ortografia, acentuação correta, vírgulas e pontuação bem colocadas, boa concordância, clareza didática e tom humano, fluido e natural, como um(a) professor(a) explicando em sala de aula. Revise toda a resposta antes de finalizar.",
       user: buildStudyGuidedUserPrompt(request),
     },
   };
@@ -1718,14 +2035,16 @@ function buildSimulatedStudyGuidedExplanation(payload) {
       usedImages: Array.isArray(request.uploadedImages) ? request.uploadedImages.length : 0,
     },
     explanation: {
-      intro: `Vamos estudar ${subjectLabel || "o conteúdo selecionado"} a partir do material enviado. O tema central identificado foi: ${firstTopic}.`,
+      intro: `${firstTopic} é o ponto principal deste estudo. Vamos entender isso de forma clara, conectando a ideia central ao que mais importa nesse conteúdo.`,
       steps: [
-        "1. Identifique o assunto principal do conteúdo enviado.",
-        "2. Separe os pontos mais importantes em linguagem simples.",
-        "3. Relacione esses pontos com a matéria e o ano escolar escolhidos.",
+        "1. Identifique a ideia principal do conteúdo enviado.",
+        "2. Explique os pontos mais importantes com linguagem simples.",
+        "3. Relacione o conteúdo à matéria e ao ano escolar escolhidos.",
+        "4. Mostre como esse conteúdo aparece na prática.",
+        "5. Feche retomando o que é mais importante guardar desse conteúdo.",
       ],
       visualExample: knowledgeText
-        ? `Exemplo visual simples: imagine um quadro com o título "${firstTopic}" e 3 tópicos curtos logo abaixo.`
+        ? `Exemplo: imagine uma situação do dia a dia em que "${firstTopic}" apareça de forma concreta, ajudando a perceber como esse conteúdo funciona fora da teoria.`
         : "Essa informação não está no material enviado",
     },
   };
@@ -1747,6 +2066,8 @@ function parseStudyGuidedExplanationStorage(rawValue) {
         generatedAt: String(parsed.metadata?.generatedAt || "").trim(),
         usedKnowledgeBase: Boolean(parsed.metadata?.usedKnowledgeBase),
         usedImages: Math.max(0, Number(parsed.metadata?.usedImages || 0)),
+        isCompatible: parsed.metadata?.isCompatible !== false,
+        incompatibilityMessage: String(parsed.metadata?.incompatibilityMessage || "").trim(),
       },
       explanation: {
         intro: String(parsed.explanation?.intro || "").trim(),
@@ -1777,6 +2098,8 @@ function parseStudyGuidedExplanationResponse(rawResponse, payload) {
         ?? fallback.metadata.usedImages
         ?? 0
       )),
+      isCompatible: rawResponse?.metadata?.isCompatible !== false,
+      incompatibilityMessage: String(rawResponse?.metadata?.incompatibilityMessage || "").trim(),
     },
     explanation: {
       intro: String(rawResponse?.explanation?.intro || fallback.explanation.intro || "").trim(),
@@ -1841,6 +2164,13 @@ async function requestAiStudyGuidedExplanation(payload) {
     }
 
     const rawResponse = await response.json();
+    if (rawResponse?.metadata?.isCompatible === false) {
+      const incompatibilityMessage = String(
+        rawResponse?.metadata?.incompatibilityMessage
+        || "A matéria escolhida e o conteúdo enviado não correspondem. No Estudo Guiado, escolha uma única matéria por vez e envie um conteúdo alinhado a ela."
+      ).trim();
+      throw new Error(incompatibilityMessage);
+    }
     return {
       ...parseStudyGuidedExplanationResponse(rawResponse, payload),
       source: "api",
@@ -2611,7 +2941,7 @@ function renderImportButtonLabel() {
   const aiVersionModeEnabled = isAiVersionModeEnabled();
   const parentDashboardMode = getParentDashboardMode();
   const label = aiVersionModeEnabled
-    ? (parentDashboardMode === "study-guided" ? "Gerar Estudo" : "Gerar Teste")
+    ? (parentDashboardMode === "study-guided" ? "Gerar Desbloqueio" : "Gerar Teste")
     : "Importar Questões";
   importCurrentGradeButton.innerHTML = `<span class="import-button__label">${label}</span>`;
   renderAiDashboardConfig();
@@ -3624,9 +3954,10 @@ function populateLoginGateUi() {
   loginGate.setAttribute("aria-hidden", "false");
   loginError.textContent = "";
   const localSetup = getInitialSetup();
+  const recognizedProfile = getRecognizedLoginProfile();
   const storedSessionEmail = getStoredActiveSessionEmail();
   const recognizedEmail = getProfileDocId(
-    localSetup?.responsibleEmail || storedSessionEmail || getCurrentProfileEmail() || "",
+    recognizedProfile?.responsibleEmail || storedSessionEmail || getCurrentProfileEmail() || "",
   );
   const hasRecognizedProfile = Boolean(recognizedEmail);
   loginEmailInput.value = hasRecognizedProfile ? recognizedEmail : "";
@@ -3634,7 +3965,10 @@ function populateLoginGateUi() {
   loginEmailInput.hidden = hasRecognizedProfile;
   loginEmailInput.disabled = hasRecognizedProfile;
   if (loginRecognizedHint) {
-    const recognizedName = localSetup?.responsibleName?.trim() || "Cadastro reconhecido";
+    const recognizedName =
+      recognizedProfile?.responsibleName?.trim() ||
+      localSetup?.responsibleName?.trim() ||
+      "Cadastro reconhecido";
     loginRecognizedHint.textContent = hasRecognizedProfile
       ? `${recognizedName}, digite apenas a senha para entrar.`
       : "";
@@ -3664,6 +3998,7 @@ function populateProtectedCycleLoginGateUi() {
 function showLoginGate() {
   clearActiveProfileSubscription();
   clearManagedAccessProfileSubscription();
+  clearActiveRuntimeSession();
   closeTestLogoutModal();
   responsibleEntryAuthorized = false;
   clearResponsibleEntryForm();
@@ -3692,6 +4027,7 @@ function forceLoginGateState() {
   if (consumeBypassLoginReturnOnce()) {
     return;
   }
+  clearActiveRuntimeSession();
   clearActiveSessionEmail();
   clearActiveProfileSubscription();
   clearManagedAccessProfileSubscription();
@@ -4236,6 +4572,7 @@ function openHistoryFromSubmenu() {
 }
 
 function continueAfterAccess() {
+  markActiveRuntimeSession();
   hidePasswordGate();
   clearRetryRestartTimer();
   clearUnlockTimer();
@@ -4245,12 +4582,39 @@ function continueAfterAccess() {
   unlockedState.hidden = true;
   educationGate.hidden = true;
   phoneFrame.classList.add("screen-free");
-  responsibleEntryAuthorized = false;
+  responsibleEntryAuthorized = true;
   clearResponsibleEntryForm();
-  setActiveView(dashboardSelectorView ? "dashboard-selector" : (responsibleEntryView ? "responsible-entry" : "parent"));
+  setActiveView(getSessionReturnView());
   if (!postLoginOnlyMode) {
     renderIdleStudentState();
   }
+}
+
+function shouldResumeAuthenticatedSessionAfterBoot() {
+  return hasActiveRuntimeSession() && Boolean(getStoredActiveSessionEmail());
+}
+
+function resumeAuthenticatedSessionAfterBoot() {
+  const storedSessionEmail = getStoredActiveSessionEmail();
+  if (!storedSessionEmail) {
+    return false;
+  }
+
+  responsibleEntryAuthorized = true;
+  hideLoginGate();
+  continueAfterAccess();
+
+  void (async () => {
+    try {
+      await ensureAdminDeviceOwnership();
+      await refreshManagedAccessProfile();
+      subscribeToActiveProfile(storedSessionEmail);
+    } catch (_error) {
+      // A retomada local nao deve falhar se a sincronizacao posterior falhar.
+    }
+  })();
+
+  return true;
 }
 
 function getGradeDisplayLabel(grade = getSelectedGrade()) {
@@ -5348,6 +5712,149 @@ function formatStudyGuidedParagraphs(text) {
     .join("");
 }
 
+function canUseStudyGuidedAudioPlayback() {
+  return typeof window !== "undefined" && typeof window.Audio !== "undefined" && typeof window.URL?.createObjectURL === "function";
+}
+
+function stopStudyGuidedAudioPlayback() {
+  if (studyGuidedAudioPlayer) {
+    studyGuidedAudioPlayer.pause();
+    studyGuidedAudioPlayer.src = "";
+    studyGuidedAudioPlayer = null;
+  }
+
+  if (studyGuidedAudioObjectUrl) {
+    URL.revokeObjectURL(studyGuidedAudioObjectUrl);
+    studyGuidedAudioObjectUrl = "";
+  }
+
+  studyGuidedAudioLoadingSection = "";
+  setStudyGuidedAudioButtonState();
+}
+
+function resetStudyGuidedAudioUsage() {
+  stopStudyGuidedAudioPlayback();
+  studyGuidedAudioPlayedSections = new Set();
+}
+
+function setStudyGuidedAudioButtonState() {
+  if (!studyGuidedExplanationBody) return;
+
+  studyGuidedExplanationBody.querySelectorAll(".study-guided-audio-button").forEach((button) => {
+    const section = String(button.dataset.speechSection || "");
+    const isLoading = section && section === studyGuidedAudioLoadingSection;
+    const wasPlayed = section && studyGuidedAudioPlayedSections.has(section);
+    const label = button.querySelector(".study-guided-audio-button__label");
+
+    button.disabled = Boolean(isLoading || wasPlayed);
+    button.classList.toggle("is-loading", isLoading);
+    button.classList.toggle("is-played", wasPlayed);
+    button.setAttribute("aria-pressed", isLoading || wasPlayed ? "true" : "false");
+
+    if (label) {
+      label.textContent = isLoading ? "Gerando..." : "Ouvir";
+    }
+  });
+}
+
+function buildStudyGuidedAudioText(section) {
+  if (!studyGuidedExplanationState?.explanation) return "";
+
+  const clampAudioText = (rawText, maxLength = 520) =>
+    String(rawText || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, maxLength);
+
+  if (section === "intro") {
+    return clampAudioText(studyGuidedExplanationState.explanation.intro || "", 420);
+  }
+
+  if (section === "steps") {
+    const steps = Array.isArray(studyGuidedExplanationState.explanation.steps)
+      ? studyGuidedExplanationState.explanation.steps.map(normalizeStudyGuidedStep).filter(Boolean)
+      : [];
+    return clampAudioText(
+      steps
+        .slice(0, 3)
+        .map((step, index) => `Passo ${index + 1}. ${step}`)
+        .join(" "),
+      620,
+    );
+  }
+
+  if (section === "example") {
+    return clampAudioText(studyGuidedExplanationState.explanation.visualExample || "", 420);
+  }
+
+  return "";
+}
+
+function buildStudyGuidedAudioStreamUrl(section) {
+  const text = buildStudyGuidedAudioText(section);
+  if (!text) {
+    throw new Error("Não há conteúdo disponível para gerar o áudio.");
+  }
+
+  const config = getAiApiConfig();
+  if (config.providerMode !== "api") {
+    throw new Error("O áudio real só fica disponível quando a API estiver ativa.");
+  }
+
+  const audioUrl = new URL(getAiGenerateStudyAudioUrl(config), window.location.href);
+  audioUrl.searchParams.set("section", section);
+  audioUrl.searchParams.set("text", text);
+  audioUrl.searchParams.set("t", String(Date.now()));
+  return audioUrl.toString();
+}
+
+async function playStudyGuidedSectionAudio(section) {
+  if (!canUseStudyGuidedAudioPlayback()) return;
+  if (!section || studyGuidedAudioPlayedSections.has(section) || studyGuidedAudioLoadingSection) return;
+
+  markActiveRuntimeSession();
+  studyGuidedAudioLoadingSection = section;
+  setStudyGuidedAudioButtonState();
+
+  try {
+    const audioStreamUrl = buildStudyGuidedAudioStreamUrl(section);
+    stopStudyGuidedAudioPlayback();
+
+    const audio = new Audio();
+    audio.preload = "metadata";
+    audio.playsInline = true;
+    audio.src = audioStreamUrl;
+
+    studyGuidedAudioPlayer = audio;
+
+    audio.onended = () => {
+      stopStudyGuidedAudioPlayback();
+    };
+    audio.onerror = () => {
+      stopStudyGuidedAudioPlayback();
+    };
+
+    audio.oncanplay = () => {
+      if (studyGuidedAudioLoadingSection === section) {
+        studyGuidedAudioLoadingSection = "";
+        setStudyGuidedAudioButtonState();
+      }
+    };
+
+    audio.load();
+    await audio.play();
+    studyGuidedAudioLoadingSection = "";
+    studyGuidedAudioPlayedSections = new Set([...studyGuidedAudioPlayedSections, section]);
+    setStudyGuidedAudioButtonState();
+  } catch (error) {
+    const message = error instanceof Error && error.name === "AbortError"
+      ? "A geração do áudio demorou demais. Tente novamente."
+      : getErrorMessage(error, "Não foi possível reproduzir o áudio agora.");
+    window.alert(message);
+    stopStudyGuidedAudioPlayback();
+  }
+}
+
 function renderStudyGuidedExplanation() {
   if (!studyGuidedExplanationPanel || !studyGuidedExplanationBody) return;
 
@@ -5355,9 +5862,12 @@ function renderStudyGuidedExplanation() {
   studyGuidedExplanationPanel.hidden = !shouldShow;
 
   if (!shouldShow) {
+    stopStudyGuidedAudioPlayback();
     studyGuidedExplanationBody.innerHTML = "";
     return;
   }
+
+  stopStudyGuidedAudioPlayback();
 
   const introHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.intro || "Essa informação não está no material enviado",
@@ -5370,7 +5880,6 @@ function renderStudyGuidedExplanation() {
   const visualExampleHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.visualExample || "Essa informação não está no material enviado",
   );
-  const sourceLabel = studyGuidedExplanationState.source === "api" ? "API" : "Simulação";
   const errorMessage = studyGuidedExplanationState.errorMessage
     ? `
       <section class="study-guided-explanation-section study-guided-explanation-section--warning">
@@ -5381,26 +5890,54 @@ function renderStudyGuidedExplanation() {
     : "";
 
   studyGuidedExplanationBody.innerHTML = `
-    <p class="study-guided-explanation-source"><strong>Origem:</strong> ${sourceLabel}</p>
     <section class="study-guided-explanation-section">
-      <h4 class="study-guided-explanation-section-title">Explicação</h4>
+      <div class="study-guided-explanation-section-head study-guided-explanation-section-head--actions-only">
+        <button type="button" class="study-guided-audio-button" data-speech-section="intro" aria-pressed="false">
+          <span class="study-guided-audio-button__label">Ouvir</span>
+          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
+        </button>
+      </div>
       ${introHtml}
     </section>
     <section class="study-guided-explanation-section">
-      <h4 class="study-guided-explanation-section-title">Explicação passo a passo</h4>
+      <div class="study-guided-explanation-section-head">
+        <h4 class="study-guided-explanation-section-title">Explicação passo a passo</h4>
+        <button type="button" class="study-guided-audio-button" data-speech-section="steps" aria-pressed="false">
+          <span class="study-guided-audio-button__label">Ouvir</span>
+          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
+        </button>
+      </div>
       <ol class="study-guided-explanation-steps">
         ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
       </ol>
     </section>
     <section class="study-guided-explanation-section">
-      <h4 class="study-guided-explanation-section-title">Exemplo visual</h4>
+      <div class="study-guided-explanation-section-head">
+        <h4 class="study-guided-explanation-section-title">Exemplo</h4>
+        <button type="button" class="study-guided-audio-button" data-speech-section="example" aria-pressed="false">
+          <span class="study-guided-audio-button__label">Ouvir</span>
+          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
+        </button>
+      </div>
       ${visualExampleHtml}
     </section>
     ${errorMessage}
   `;
+
+  setStudyGuidedAudioButtonState();
 }
 
+studyGuidedExplanationBody?.addEventListener("click", (event) => {
+  const button = event.target instanceof HTMLElement
+    ? event.target.closest(".study-guided-audio-button")
+    : null;
+  if (!button) return;
+  playStudyGuidedSectionAudio(String(button.dataset.speechSection || ""));
+});
+
 function setStudyGuidedExplanation(data) {
+  resetStudyGuidedAudioUsage();
+
   if (!data) {
     studyGuidedExplanationState = null;
     localStorage.removeItem(studyGuidedExplanationStorageKey);
@@ -6368,6 +6905,7 @@ function setActiveView(view) {
   if (!["parent", "responsible-entry"].includes(view)) {
     responsibleEntryAuthorized = false;
   }
+  storeLastActiveView(view);
 
   switchButtons.forEach((item) => {
     const isActive = item.dataset.view === view;
@@ -6519,6 +7057,10 @@ initialSetupForm.addEventListener("submit", async (event) => {
       createdAt: new Date().toISOString(),
     }),
   );
+  storeRecognizedLoginProfile({
+    responsibleName,
+    responsibleEmail,
+  });
   localStorage.setItem(parentPasswordStorageKey, parentPassword);
   localStorage.setItem("smartUnlockStudentGrade", grade);
   storeActiveSessionEmail(responsibleEmail);
@@ -7139,13 +7681,6 @@ if (responsibleSubjectBreakdownTrigger) {
   });
 }
 
-if (parentDashboardBackButton) {
-  parentDashboardBackButton.addEventListener("click", () => {
-    responsibleEntryAuthorized = true;
-    setActiveView(dashboardSelectorView ? "dashboard-selector" : "responsible-entry");
-  });
-}
-
 document.addEventListener("click", (event) => {
   if (!responsibleSubjectBreakdownTrigger || !responsibleSubjectBreakdownPanel) return;
   const target = event.target;
@@ -7165,10 +7700,6 @@ if (profileMenuExitButton) {
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    if (fileImportPickerActive) {
-      return;
-    }
-    responsibleEntryAuthorized = false;
     return;
   }
   if (fileImportPickerActive) {
@@ -7178,10 +7709,6 @@ document.addEventListener("visibilitychange", () => {
   if (shouldShowTestStatusView()) {
     setActiveView("test-status");
     updateUnlockCountdown();
-    return;
-  }
-  if ((parentView.classList.contains("active") || parentalControlView?.classList.contains("active")) && shouldRequireResponsibleEntryGate("parent")) {
-    setActiveView("responsible-entry");
   }
 });
 
@@ -7193,10 +7720,6 @@ window.addEventListener("focus", () => {
   if (shouldShowTestStatusView()) {
     setActiveView("test-status");
     updateUnlockCountdown();
-    return;
-  }
-  if ((parentView.classList.contains("active") || parentalControlView?.classList.contains("active")) && shouldRequireResponsibleEntryGate("parent")) {
-    setActiveView("responsible-entry");
   }
 });
 
@@ -7206,26 +7729,16 @@ if (testStatusStopButton) {
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    if (fileImportPickerActive) {
-      return;
-    }
-    responsibleEntryAuthorized = false;
     return;
   }
   if (fileImportPickerActive) {
     return;
-  }
-  if ((parentView.classList.contains("active") || parentalControlView?.classList.contains("active")) && shouldRequireResponsibleEntryGate("parent")) {
-    setActiveView("responsible-entry");
   }
 });
 
 window.addEventListener("focus", () => {
   if (fileImportPickerActive) {
     return;
-  }
-  if ((parentView.classList.contains("active") || parentalControlView?.classList.contains("active")) && shouldRequireResponsibleEntryGate("parent")) {
-    setActiveView("responsible-entry");
   }
 });
 
@@ -7369,13 +7882,24 @@ if (importCurrentGradeButton) {
         return;
       }
 
+      const contentValidation = validateStudyGuidedContentForSelectedSubject(selectionState);
+      if (!contentValidation.ok) {
+        openSetupWarningModal(contentValidation.message);
+        return;
+      }
+
       const generationPayload = buildStudyGuidedPayload(selectionState);
+      const persistedStudyGuidedKnowledge = aiDashboardKnowledge?.value || getStudyGuidedKnowledge();
       importCurrentGradeButton.disabled = true;
       importCurrentGradeButton.classList.add("is-updating");
       importCurrentGradeButton.textContent = "Gerando...";
 
       try {
         const generatedExplanation = await requestAiStudyGuidedExplanation(generationPayload);
+        if (persistedStudyGuidedKnowledge.trim()) {
+          setStudyGuidedKnowledge(persistedStudyGuidedKnowledge);
+          if (aiDashboardKnowledge) aiDashboardKnowledge.value = persistedStudyGuidedKnowledge;
+        }
         setStudyGuidedExplanation(generatedExplanation);
       } catch (error) {
         openSetupWarningModal(error instanceof Error ? error.message : "Não foi possível gerar a explicação do estudo.");
@@ -7839,8 +8363,13 @@ function formatSyncDate() {
 function runSplashScreen() {
   if (splashDurationMs <= 0) {
     splashScreen.classList.add("is-hidden");
+    appBootCompleted = true;
     if (hasOngoingProtectedCycle()) {
       resumeProtectedCycleAfterBoot();
+      return;
+    }
+    if (shouldResumeAuthenticatedSessionAfterBoot()) {
+      resumeAuthenticatedSessionAfterBoot();
       return;
     }
     clearActiveSessionEmail();
@@ -7858,8 +8387,13 @@ function runSplashScreen() {
 
   window.setTimeout(() => {
     splashScreen.classList.add("is-hidden");
+    appBootCompleted = true;
     if (hasOngoingProtectedCycle()) {
       resumeProtectedCycleAfterBoot();
+      return;
+    }
+    if (shouldResumeAuthenticatedSessionAfterBoot()) {
+      resumeAuthenticatedSessionAfterBoot();
       return;
     }
     clearActiveSessionEmail();
@@ -7876,6 +8410,10 @@ function runSplashScreen() {
 }
 
 function emergencyReleaseSplashToLogin() {
+  if (appBootCompleted) {
+    return;
+  }
+
   try {
     splashScreen?.classList.add("is-hidden");
   } catch (_error) {

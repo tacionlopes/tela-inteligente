@@ -1,6 +1,6 @@
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
-const DEFAULT_MAX_OUTPUT_TOKENS = Math.max(1200, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 5000));
+const DEFAULT_MAX_OUTPUT_TOKENS = Math.max(1200, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 2000));
 
 const AI_STUDY_EXPLANATION_SCHEMA = {
   type: "object",
@@ -10,7 +10,7 @@ const AI_STUDY_EXPLANATION_SCHEMA = {
     metadata: {
       type: "object",
       additionalProperties: false,
-      required: ["grade", "subjects", "generatedAt", "usedKnowledgeBase", "usedImages"],
+      required: ["grade", "subjects", "generatedAt", "usedKnowledgeBase", "usedImages", "isCompatible", "incompatibilityMessage"],
       properties: {
         grade: { type: "string" },
         subjects: {
@@ -20,6 +20,8 @@ const AI_STUDY_EXPLANATION_SCHEMA = {
         generatedAt: { type: "string" },
         usedKnowledgeBase: { type: "boolean" },
         usedImages: { type: "number" },
+        isCompatible: { type: "boolean" },
+        incompatibilityMessage: { type: "string" },
       },
     },
     explanation: {
@@ -37,6 +39,132 @@ const AI_STUDY_EXPLANATION_SCHEMA = {
     },
   },
 };
+
+const STUDY_GUIDED_INCOMPATIBILITY_MESSAGE = "A matéria escolhida e o conteúdo enviado não correspondem. No Estudo Guiado, escolha uma única matéria por vez e envie um conteúdo alinhado a ela.";
+
+const STUDY_GUIDED_SUBJECT_KEYWORD_HINTS = {
+  "Português": ["substantivo", "verbo", "adjetivo", "oração", "crase", "pontuação", "concordância", "acentuação", "interpretação", "texto"],
+  "História": ["guerra", "império", "colônia", "revolução", "independência", "idade média", "presidente", "ditadura", "povo antigo", "civilização"],
+  "Geografia": ["mapa", "território", "clima", "relevo", "vegetação", "hidrografia", "continente", "população", "urbanização", "paisagem"],
+  "Biologia": ["coração", "célula", "corpo humano", "sistema digestório", "respiração", "órgão", "ser vivo", "genética", "ecossistema", "fotossíntese"],
+  "Química": ["átomo", "átomos", "molécula", "moléculas", "elemento químico", "tabela periódica", "reação química", "mistura", "substância", "ligação química"],
+  "Física": ["força", "movimento", "energia", "velocidade", "gravidade", "massa", "aceleração", "eletricidade", "circuito", "ondas"],
+  "Inglês": ["verb to be", "simple present", "simple past", "present continuous", "english", "inglês", "vocabulary", "reading", "listening"],
+  "Artes": ["pintura", "escultura", "teatro", "música", "dança", "obra de arte", "artista", "cores", "desenho", "cinema"],
+};
+
+function normalizePlainText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function getStudyGuidedDisplaySubject(subject) {
+  const normalized = normalizePlainText(subject);
+
+  if (normalized === normalizePlainText("Ciências")) return "Biologia";
+  if (normalized === normalizePlainText("Matemática")) return "Química";
+  if (normalized === normalizePlainText("Lógica")) return "Física";
+  if (normalized === normalizePlainText("Historia da Arte")) return "Artes";
+
+  return String(subject || "").trim();
+}
+
+function detectStudyGuidedLikelySubjectFromText(rawText) {
+  const text = normalizePlainText(rawText);
+  if (!text) return "";
+
+  let bestSubject = "";
+  let bestScore = 0;
+
+  Object.entries(STUDY_GUIDED_SUBJECT_KEYWORD_HINTS).forEach(([subjectLabel, keywords]) => {
+    const score = keywords.reduce((total, keyword) => (
+      total + (text.includes(normalizePlainText(keyword)) ? 1 : 0)
+    ), 0);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSubject = subjectLabel;
+    }
+  });
+
+  return bestScore > 0 ? bestSubject : "";
+}
+
+function isStudyGuidedTextTooVague(rawText) {
+  const normalizedText = String(rawText || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!normalizedText) return true;
+
+  const words = normalizedText.split(" ").filter(Boolean);
+  if (words.length < 2) return true;
+
+  return normalizedText.length < 12;
+}
+
+function buildIncompatibleStudyGuidedResponse(request, message = STUDY_GUIDED_INCOMPATIBILITY_MESSAGE) {
+  return {
+    metadata: {
+      grade: String(request?.grade || "").trim(),
+      subjects: Array.isArray(request?.subjects) ? request.subjects.map((subject) => String(subject || "").trim()).filter(Boolean) : [],
+      generatedAt: new Date().toISOString(),
+      usedKnowledgeBase: Boolean(String(request?.knowledgeBase || "").trim()),
+      usedImages: Array.isArray(request?.uploadedImages) ? request.uploadedImages.filter(Boolean).length : 0,
+      isCompatible: false,
+      incompatibilityMessage: message,
+    },
+    explanation: {
+      intro: "",
+      steps: [],
+      visualExample: "",
+    },
+  };
+}
+
+function validateStudyGuidedSubjectCompatibility(request) {
+  const selectedSubjects = Array.isArray(request?.subjects) ? request.subjects : [];
+  if (selectedSubjects.length !== 1) {
+    return {
+      ok: false,
+      response: buildIncompatibleStudyGuidedResponse(
+        request,
+        "No Estudo Guiado, escolha apenas uma matéria por vez antes de gerar a explicação."
+      ),
+    };
+  }
+
+  const knowledgeText = String(request?.knowledgeBase || "").trim();
+  const hasUploadedImages = Array.isArray(request?.uploadedImages) && request.uploadedImages.some(Boolean);
+  if (!knowledgeText) {
+    return { ok: true, response: null };
+  }
+
+  const selectedSubjectLabel = getStudyGuidedDisplaySubject(selectedSubjects[0]);
+  const detectedSubject = detectStudyGuidedLikelySubjectFromText(knowledgeText);
+
+  if (detectedSubject && detectedSubject !== selectedSubjectLabel) {
+    return {
+      ok: false,
+      response: buildIncompatibleStudyGuidedResponse(request),
+    };
+  }
+
+  if (!detectedSubject && !hasUploadedImages && isStudyGuidedTextTooVague(knowledgeText)) {
+    return {
+      ok: false,
+      response: buildIncompatibleStudyGuidedResponse(
+        request,
+        "O conteúdo enviado é inválido para a matéria escolhida. Escreva um tema real da matéria para gerar o estudo."
+      ),
+    };
+  }
+
+  return { ok: true, response: null };
+}
 
 function sendJson(response, statusCode, payload) {
   if (typeof response.status === "function") {
@@ -60,6 +188,27 @@ function sendJson(response, statusCode, payload) {
 
 function getErrorMessage(error, fallbackMessage) {
   return error instanceof Error && error.message ? error.message : fallbackMessage;
+}
+
+function safeJsonParse(rawText) {
+  if (!rawText) {
+    throw new Error("A OpenAI não devolveu conteúdo estruturado para a explicação.");
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch (error) {
+    const jsonMatch = String(rawText).match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (_) {
+        // continua para o erro final mais claro
+      }
+    }
+
+    throw new Error("A resposta da IA veio em formato inválido. Tente novamente com um conteúdo mais específico ou mais curto.");
+  }
 }
 
 async function collectJsonBody(request) {
@@ -161,9 +310,17 @@ async function callOpenAiGenerateStudyExplanation({ request, prompt }) {
     throw new Error("A OpenAI não devolveu conteúdo estruturado para a explicação.");
   }
 
-  const parsedContent = JSON.parse(outputText);
+  const parsedContent = safeJsonParse(outputText);
   if (parsedContent?.metadata && !parsedContent.metadata.generatedAt) {
     parsedContent.metadata.generatedAt = new Date().toISOString();
+  }
+
+  if (parsedContent?.metadata && typeof parsedContent.metadata.isCompatible !== "boolean") {
+    parsedContent.metadata.isCompatible = true;
+  }
+
+  if (parsedContent?.metadata && typeof parsedContent.metadata.incompatibilityMessage !== "string") {
+    parsedContent.metadata.incompatibilityMessage = "";
   }
 
   return parsedContent;
@@ -205,6 +362,11 @@ async function handler(request, response) {
       error: "invalid_request",
       message: validationMessage,
     });
+  }
+
+  const compatibilityValidation = validateStudyGuidedSubjectCompatibility(studyRequest);
+  if (!compatibilityValidation.ok) {
+    return sendJson(response, 200, compatibilityValidation.response);
   }
 
   const prompt = body?.prompt || {};

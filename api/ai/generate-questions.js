@@ -218,6 +218,7 @@ async function handler(request, response) {
 
     return sendJson(response, 200, generatedQuestions);
   } catch (error) {
+    console.error("[AI generate questions] Falha na geracao:", error);
     return sendJson(response, 502, {
       error: "generation_failed",
       message: getErrorMessage(error, "A geração de questões falhou."),
