@@ -33,7 +33,16 @@ const parentDashboardModeStorageKey = "smartUnlockParentDashboardMode";
 const aiGenerationDraftStorageKey = "smartUnlockAiGenerationDraft";
 const aiGeneratedQuestionBankStorageKey = "smartUnlockAiGeneratedQuestionBank";
 const aiGenerationMetaStorageKey = "smartUnlockAiGenerationMeta";
+const studyGuidedTestDraftStorageKey = "smartUnlockStudyGuidedTestDraft";
+const studyGuidedTestQuestionBankStorageKey = "smartUnlockStudyGuidedTestQuestionBank";
+const studyGuidedTestMetaStorageKey = "smartUnlockStudyGuidedTestMeta";
 const studyGuidedKnowledgeStorageKey = "smartUnlockStudyGuidedKnowledge";
+const studyGuidedConversationStorageKey = "smartUnlockStudyGuidedConversation";
+const studyGuidedKnowledgePlaceholder = "Escreva o conteúdo ou tema da matéria";
+const legacyStudyGuidedKnowledgePlaceholders = new Set([
+  "Escreva o conteúdo, tema da matéria, ou faça upload da imagem do conteúdo da matéria que está no livro ou caderno.",
+  "Escreva o conteúdo, tema da matéria, ou faça upload da imagem do conteúdo da matéria que está no livro ou caderno",
+]);
 const parentalControlSettingsStorageKey = "smartUnlockParentalControlSettings";
 const parentalBlockedAppCatalog = [
   { key: "instagram", label: "Instagram" },
@@ -262,6 +271,7 @@ const feedback = document.querySelector("#feedback");
 const explanationBox = document.querySelector("#explanationBox");
 const nextButton = document.querySelector("#nextButton");
 const actionRow = document.querySelector("#actionRow");
+const testSummaryExitButton = document.querySelector("#testSummaryExitButton");
 const clearResultsButton = document.querySelector("#clearResultsButton");
 const manualUnlockButton = document.querySelector("#manualUnlockButton");
 const stopTestButton = document.querySelector("#stopTestButton");
@@ -273,6 +283,7 @@ const historyCloseButton = document.querySelector("#historyCloseButton");
 const questionBankStatus = document.querySelector("#questionBankStatus");
 const importCurrentGradeButton = document.querySelector("#importCurrentGradeButton");
 const questionBankPreviewShell = document.querySelector("#questionBankPreviewShell");
+const studyGuidedCameraButton = document.querySelector("#studyGuidedCameraButton");
 const questionBankPreviewButton = document.querySelector("#questionBankPreviewButton");
 const questionBankPreviewPanel = document.querySelector("#questionBankPreviewPanel");
 const questionBankPreviewTitleText = document.querySelector("#questionBankPreviewTitleText");
@@ -312,6 +323,14 @@ const setupWarningOverlay = document.querySelector("#setupWarningOverlay");
 const setupWarningModal = document.querySelector("#setupWarningModal");
 const setupWarningMessage = document.querySelector("#setupWarningMessage");
 const setupWarningConfirmButton = document.querySelector("#setupWarningConfirmButton");
+const studyGuidedReplayOverlay = document.querySelector("#studyGuidedReplayOverlay");
+const studyGuidedReplayModal = document.querySelector("#studyGuidedReplayModal");
+const studyGuidedReplayMessage = document.querySelector("#studyGuidedReplayMessage");
+const studyGuidedReplayCancelButton = document.querySelector("#studyGuidedReplayCancelButton");
+const studyGuidedReplayConfirmButton = document.querySelector("#studyGuidedReplayConfirmButton");
+const studyGuidedAudioWaitOverlay = document.querySelector("#studyGuidedAudioWaitOverlay");
+const studyGuidedAudioWaitModal = document.querySelector("#studyGuidedAudioWaitModal");
+const studyGuidedAudioWaitMessage = document.querySelector("#studyGuidedAudioWaitMessage");
 const aiGenerationOverlay = document.querySelector("#aiGenerationOverlay");
 const aiGenerationModal = document.querySelector("#aiGenerationModal");
 const aiGenerationGrade = document.querySelector("#aiGenerationGrade");
@@ -379,19 +398,1049 @@ let fileImportPickerActive = false;
 let studyGuidedAudioPlayer = null;
 let studyGuidedAudioObjectUrl = "";
 let studyGuidedAudioLoadingSection = "";
-let studyGuidedAudioPlayedSections = new Set();
+let studyGuidedAudioActiveSection = "";
+let studyGuidedAudioPaused = false;
+let studyGuidedAudioPreloadedSources = new Map();
+let studyGuidedAudioPlaylistIndex = 0;
+let studyGuidedReflectionAnalysisDebounceId = 0;
+let studyGuidedReflectionStagnationTimeoutId = 0;
+let studyGuidedReflectionRequestToken = 0;
+let studyGuidedReflectionAnalyzing = false;
+let studyGuidedReflectionEvaluating = false;
+let studyGuidedReplayResolve = null;
+const studyGuidedUnderstandingSegmentCount = 8;
+const studyGuidedStagnationPromptDelayMs = 30000;
 const studyGuidedUploadPreviewStorageKey = "smartUnlockStudyGuidedUploadPreview";
 const studyGuidedExplanationStorageKey = "smartUnlockStudyGuidedExplanation";
+const studyGuidedReflectionStorageKey = "smartUnlockStudyGuidedReflection";
+const studyGuidedPreviewVersionStorageKey = "smartUnlockStudyGuidedPreviewVersion";
+
+function syncStudyGuidedPreviewVersion() {
+  const previewVersion = new URLSearchParams(window.location.search).get("v") || "";
+  if (!previewVersion) return;
+
+  const isLocalPreviewRuntime = ["127.0.0.1", "localhost"].includes(window.location.hostname);
+  const lastPreviewVersion = String(localStorage.getItem(studyGuidedPreviewVersionStorageKey) || "");
+  if (isLocalPreviewRuntime || (lastPreviewVersion && lastPreviewVersion !== previewVersion)) {
+    localStorage.removeItem(studyGuidedExplanationStorageKey);
+    localStorage.removeItem(studyGuidedReflectionStorageKey);
+  }
+
+  if (lastPreviewVersion !== previewVersion) {
+    localStorage.setItem(studyGuidedPreviewVersionStorageKey, previewVersion);
+  }
+}
+
+syncStudyGuidedPreviewVersion();
 let studyGuidedUploadPreviewDataUrls = parseStudyGuidedUploadPreviewStorage(
   localStorage.getItem(studyGuidedUploadPreviewStorageKey),
 );
 let studyGuidedExplanationState = parseStudyGuidedExplanationStorage(
   localStorage.getItem(studyGuidedExplanationStorageKey),
 );
+let studyGuidedReflectionState = parseStudyGuidedReflectionStorage(
+  localStorage.getItem(studyGuidedReflectionStorageKey),
+);
+let studyGuidedConversationState = parseStudyGuidedConversationStorage(
+  localStorage.getItem(studyGuidedConversationStorageKey),
+);
+let studyGuidedTestDraft = parseStudyGuidedTestDraft(
+  localStorage.getItem(studyGuidedTestDraftStorageKey),
+);
+let studyGuidedTestGenerating = false;
+let studyGuidedTestApplying = false;
+let studyGuidedFollowupGenerating = false;
 const optionalLibsState = {
   xlsxLoading: false,
   firebaseLoading: false,
 };
+const studyGuidedStepsAudioMaxLength = 9000;
+const studyGuidedAudioChunkMaxLength = 1200;
+const studyGuidedFollowupInvalidMessage = "Este conteúdo não corresponde à matéria escolhida nem ao conteúdo atualmente em estudo. Faça uma pergunta relacionada ao tema atual.";
+
+function normalizeStudyGuidedAudioText(rawText) {
+  return String(rawText || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function limitStudyGuidedAudioText(text, maxLength) {
+  const normalized = normalizeStudyGuidedAudioText(text);
+  if (!maxLength || normalized.length <= maxLength) return normalized;
+
+  const sliced = normalized.slice(0, maxLength);
+  const lastSpaceIndex = sliced.lastIndexOf(" ");
+  return (lastSpaceIndex > Math.floor(maxLength * 0.7) ? sliced.slice(0, lastSpaceIndex) : sliced).trim();
+}
+
+function splitStudyGuidedAudioTextIntoChunks(text, maxLength = studyGuidedAudioChunkMaxLength) {
+  const normalized = normalizeStudyGuidedAudioText(text);
+  if (!normalized) return [];
+  if (normalized.length <= maxLength) return [normalized];
+
+  const chunks = [];
+  let remaining = normalized;
+
+  while (remaining.length > maxLength) {
+    let splitIndex = Math.max(
+      remaining.lastIndexOf(". ", maxLength),
+      remaining.lastIndexOf("! ", maxLength),
+      remaining.lastIndexOf("? ", maxLength),
+      remaining.lastIndexOf("; ", maxLength),
+      remaining.lastIndexOf(": ", maxLength),
+    );
+
+    if (splitIndex < Math.floor(maxLength * 0.55)) {
+      splitIndex = remaining.lastIndexOf(" ", maxLength);
+    }
+
+    if (splitIndex < Math.floor(maxLength * 0.4)) {
+      splitIndex = maxLength;
+    } else {
+      splitIndex += 1;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex).trim());
+    remaining = remaining.slice(splitIndex).trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks.filter(Boolean);
+}
+
+function getStudyGuidedExplanationSignature(source) {
+  if (!source?.explanation) return "";
+
+  const intro = normalizeStudyGuidedAudioText(source.explanation.intro || "");
+  const steps = Array.isArray(source.explanation.steps)
+    ? source.explanation.steps.map((step) => normalizeStudyGuidedAudioText(step)).join(" | ")
+    : "";
+  const visualExample = normalizeStudyGuidedAudioText(source.explanation.visualExample || "");
+
+  return `${intro}::${steps}::${visualExample}`.slice(0, 6000);
+}
+
+function createDefaultStudyGuidedTestDraft(signature = "") {
+  return {
+    signature,
+    count: 5,
+    questionTypes: {
+      choice: true,
+      text: false,
+    },
+    previewOpen: false,
+  };
+}
+
+function createEmptyStudyGuidedConversationState(signature = "") {
+  return {
+    signature: String(signature || "").trim(),
+    messages: [],
+  };
+}
+
+function parseStudyGuidedConversationStorage(rawValue) {
+  if (!rawValue) return createEmptyStudyGuidedConversationState();
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    const messages = Array.isArray(parsed?.messages)
+      ? parsed.messages
+        .map((item, index) => ({
+          id: String(item?.id || `message-${index + 1}`),
+          role: item?.role === "user" ? "user" : "assistant",
+          text: String(item?.text || "").trim(),
+          createdAt: String(item?.createdAt || "").trim(),
+        }))
+        .filter((item) => item.text)
+      : [];
+
+    return {
+      signature: String(parsed?.signature || "").trim(),
+      messages,
+    };
+  } catch {
+    return createEmptyStudyGuidedConversationState();
+  }
+}
+
+function saveStudyGuidedConversationState() {
+  if (!studyGuidedConversationState?.signature && !(studyGuidedConversationState?.messages || []).length) {
+    localStorage.removeItem(studyGuidedConversationStorageKey);
+    return;
+  }
+
+  localStorage.setItem(studyGuidedConversationStorageKey, JSON.stringify(studyGuidedConversationState));
+}
+
+function syncStudyGuidedConversationState() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+
+  if (!currentSignature) {
+    studyGuidedConversationState = createEmptyStudyGuidedConversationState();
+    localStorage.removeItem(studyGuidedConversationStorageKey);
+    return;
+  }
+
+  if (!studyGuidedConversationState || studyGuidedConversationState.signature !== currentSignature) {
+    studyGuidedConversationState = createEmptyStudyGuidedConversationState(currentSignature);
+    saveStudyGuidedConversationState();
+  }
+}
+
+function getStudyGuidedConversationMessages() {
+  syncStudyGuidedConversationState();
+  return Array.isArray(studyGuidedConversationState?.messages) ? studyGuidedConversationState.messages : [];
+}
+
+function appendStudyGuidedConversationMessage(role, text) {
+  const normalizedText = String(text || "").trim();
+  if (!normalizedText) return;
+
+  syncStudyGuidedConversationState();
+  const nextMessage = {
+    id: `study-guided-message-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: role === "user" ? "user" : "assistant",
+    text: normalizedText,
+    createdAt: new Date().toISOString(),
+  };
+
+  studyGuidedConversationState.messages = [...getStudyGuidedConversationMessages(), nextMessage].slice(-20);
+  saveStudyGuidedConversationState();
+}
+
+function parseStudyGuidedTestDraft(rawValue) {
+  if (!rawValue) return createDefaultStudyGuidedTestDraft();
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    return {
+      signature: String(parsed?.signature || "").trim(),
+      count: Math.max(1, Number(parsed?.count || 5)),
+      questionTypes: {
+        choice: Boolean(parsed?.questionTypes?.choice ?? true),
+        text: Boolean(parsed?.questionTypes?.text),
+      },
+      previewOpen: Boolean(parsed?.previewOpen),
+    };
+  } catch (_) {
+    return createDefaultStudyGuidedTestDraft();
+  }
+}
+
+function getStudyGuidedTestDraft() {
+  return {
+    ...studyGuidedTestDraft,
+    questionTypes: {
+      choice: Boolean(studyGuidedTestDraft?.questionTypes?.choice),
+      text: Boolean(studyGuidedTestDraft?.questionTypes?.text),
+    },
+  };
+}
+
+function saveStudyGuidedTestDraft(draft) {
+  const nextDraft = {
+    signature: String(draft?.signature || "").trim(),
+    count: Math.max(1, Number(draft?.count || 5)),
+    questionTypes: {
+      choice: Boolean(draft?.questionTypes?.choice),
+      text: Boolean(draft?.questionTypes?.text),
+    },
+    previewOpen: Boolean(draft?.previewOpen),
+  };
+  studyGuidedTestDraft = nextDraft;
+  localStorage.setItem(studyGuidedTestDraftStorageKey, JSON.stringify(nextDraft));
+}
+
+function createEmptyStudyGuidedReflectionState(signature = "") {
+  return {
+    signature,
+    text: "",
+    blurLocked: false,
+    reviewUnlocked: false,
+    progressSegments: 0,
+    progressScore: 0,
+    progressSource: "",
+    progressNotice: "",
+    canEvaluate: false,
+    readyToEvaluate: false,
+    progressMessage: "",
+    lastProgressAt: 0,
+    promptShown: false,
+    finalEvaluation: null,
+  };
+}
+
+function parseStudyGuidedReflectionStorage(rawValue) {
+  if (!rawValue) return createEmptyStudyGuidedReflectionState();
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    return {
+      signature: String(parsed?.signature || "").trim(),
+      text: String(parsed?.text || ""),
+      blurLocked: Boolean(parsed?.blurLocked),
+      reviewUnlocked: Boolean(parsed?.reviewUnlocked),
+      progressSegments: Math.max(0, Math.min(studyGuidedUnderstandingSegmentCount, Number(parsed?.progressSegments || 0))),
+      progressScore: Math.max(0, Math.min(100, Number(parsed?.progressScore || 0))),
+      progressSource: String(parsed?.progressSource || "").trim(),
+      progressNotice: String(parsed?.progressNotice || "").trim(),
+      canEvaluate: Boolean(parsed?.canEvaluate),
+      readyToEvaluate: Boolean(parsed?.readyToEvaluate),
+      progressMessage: String(parsed?.progressMessage || "").trim(),
+      lastProgressAt: Math.max(0, Number(parsed?.lastProgressAt || 0)),
+      promptShown: Boolean(parsed?.promptShown),
+      finalEvaluation: parsed?.finalEvaluation && typeof parsed.finalEvaluation === "object"
+        ? {
+          analysis: String(parsed.finalEvaluation.analysis || "").trim(),
+          positives: Array.isArray(parsed.finalEvaluation.positives)
+            ? parsed.finalEvaluation.positives.map((item) => String(item || "").trim()).filter(Boolean)
+            : [],
+          deepenings: Array.isArray(parsed.finalEvaluation.deepenings)
+            ? parsed.finalEvaluation.deepenings.map((item) => String(item || "").trim()).filter(Boolean)
+            : [],
+          didacticExplanation: String(parsed.finalEvaluation.didacticExplanation || "").trim(),
+          sampleAnswer: String(parsed.finalEvaluation.sampleAnswer || "").trim(),
+          summary: String(parsed.finalEvaluation.summary || "").trim(),
+          source: String(parsed.finalEvaluation.source || "").trim(),
+          notice: String(parsed.finalEvaluation.notice || "").trim(),
+        }
+        : null,
+    };
+  } catch (error) {
+    return createEmptyStudyGuidedReflectionState();
+  }
+}
+
+function syncStudyGuidedReflectionState() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+
+  if (!currentSignature) {
+    studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
+    localStorage.removeItem(studyGuidedReflectionStorageKey);
+    return;
+  }
+
+  if (studyGuidedReflectionState.signature === currentSignature) {
+    return;
+  }
+
+  studyGuidedReflectionState = createEmptyStudyGuidedReflectionState(currentSignature);
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function getStudyGuidedReflectionText() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) {
+    return "";
+  }
+  return String(studyGuidedReflectionState.text || "");
+}
+
+function isStudyGuidedReflectionBlurLocked() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  return Boolean(
+    currentSignature
+    && studyGuidedReflectionState.signature === currentSignature
+    && studyGuidedReflectionState.blurLocked,
+  ) && !studyGuidedReflectionState.reviewUnlocked;
+}
+
+function setStudyGuidedReflectionText(value) {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature) return;
+
+  const nextText = String(value || "");
+  const previousSignature = studyGuidedReflectionState.signature;
+  const previousText = String(studyGuidedReflectionState.text || "");
+  const nextTrimmedText = nextText.trim();
+  studyGuidedReflectionState = {
+    signature: currentSignature,
+    text: nextText,
+    blurLocked: previousSignature === currentSignature
+      ? (studyGuidedReflectionState.blurLocked || nextTrimmedText.length > 0)
+      : nextTrimmedText.length > 0,
+    reviewUnlocked: nextTrimmedText.length > 0 ? false : studyGuidedReflectionState.reviewUnlocked,
+    progressSegments: previousSignature === currentSignature ? studyGuidedReflectionState.progressSegments : 0,
+    progressScore: previousSignature === currentSignature ? studyGuidedReflectionState.progressScore : 0,
+    progressSource: previousSignature === currentSignature ? studyGuidedReflectionState.progressSource : "",
+    progressNotice: previousSignature === currentSignature ? studyGuidedReflectionState.progressNotice : "",
+    canEvaluate: previousSignature === currentSignature ? studyGuidedReflectionState.canEvaluate : false,
+    readyToEvaluate: previousSignature === currentSignature ? studyGuidedReflectionState.readyToEvaluate : false,
+    progressMessage: previousSignature === currentSignature ? studyGuidedReflectionState.progressMessage : "",
+    lastProgressAt: previousSignature === currentSignature
+      ? (studyGuidedReflectionState.lastProgressAt || (nextTrimmedText ? Date.now() : 0))
+      : (nextTrimmedText ? Date.now() : 0),
+    promptShown: previousSignature === currentSignature ? studyGuidedReflectionState.promptShown : false,
+    finalEvaluation: previousText !== nextText ? null : studyGuidedReflectionState.finalEvaluation,
+  };
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function updateStudyGuidedReflectionBlurState() {
+  if (!studyGuidedExplanationBody) return;
+  const content = studyGuidedExplanationBody.querySelector(".study-guided-explanation-content");
+  if (!content) return;
+  content.classList.toggle("is-blurred", isStudyGuidedReflectionBlurLocked());
+}
+
+function updateStudyGuidedReflectionTextareaVisualState() {
+  if (!studyGuidedExplanationBody) return;
+  const textarea = studyGuidedExplanationBody.querySelector(".study-guided-reflection-textarea");
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  textarea.classList.toggle("has-content", textarea.value.trim().length > 0);
+}
+
+const studyGuidedReflectionStopWords = new Set([
+  "a", "ao", "aos", "as", "com", "como", "da", "das", "de", "do", "dos", "e", "ela", "ele",
+  "em", "entre", "essa", "esse", "esta", "este", "eu", "foi", "mais", "mas", "na", "nas",
+  "no", "nos", "o", "os", "ou", "para", "por", "que", "se", "sem", "ser", "sua", "suas",
+  "seu", "seus", "tem", "uma", "umas", "um", "uns",
+]);
+
+function getStudyGuidedReflectionStateForCurrentExplanation() {
+  syncStudyGuidedReflectionState();
+  return studyGuidedReflectionState;
+}
+
+function canStudyGuidedReflectionBeEvaluated(reflectionState = getStudyGuidedReflectionStateForCurrentExplanation()) {
+  const progressSegments = Math.max(0, Number(reflectionState?.progressSegments || 0));
+  return Boolean(reflectionState?.canEvaluate) || progressSegments >= Math.ceil(studyGuidedUnderstandingSegmentCount / 2);
+}
+
+function isStudyGuidedReflectionReady(reflectionState = getStudyGuidedReflectionStateForCurrentExplanation()) {
+  const progressSegments = Math.max(0, Number(reflectionState?.progressSegments || 0));
+  return Boolean(reflectionState?.readyToEvaluate) || progressSegments >= studyGuidedUnderstandingSegmentCount;
+}
+
+function normalizeStudyGuidedMeaningText(text) {
+  return normalizeAnswerComparisonText(text)
+    .replace(/\b\d+\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getStudyGuidedMeaningfulWords(text) {
+  return normalizeStudyGuidedMeaningText(text)
+    .split(" ")
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 4 && !studyGuidedReflectionStopWords.has(word));
+}
+
+function extractStudyGuidedReferenceKeywords(explanation) {
+  const sourceText = [
+    explanation?.intro || "",
+    ...(Array.isArray(explanation?.steps) ? explanation.steps : []),
+    explanation?.visualExample || "",
+  ].join(" ");
+
+  const counts = new Map();
+  getStudyGuidedMeaningfulWords(sourceText).forEach((word) => {
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+
+  return [...counts.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) return right[1] - left[1];
+      return right[0].length - left[0].length;
+    })
+    .slice(0, 14)
+    .map(([word]) => word);
+}
+
+function buildStudyGuidedWritingEvaluationRequest(mode = "progress") {
+  if (!studyGuidedExplanationState?.explanation) return null;
+
+  const reflectionState = getStudyGuidedReflectionStateForCurrentExplanation();
+  const explanation = studyGuidedExplanationState.explanation;
+  const metadata = studyGuidedExplanationState.metadata || {};
+  const selectedGrade = String(metadata.grade || "").trim();
+  const selectedSubjects = Array.isArray(metadata.subjects)
+    ? metadata.subjects.map((subject) => String(subject || "").trim()).filter(Boolean)
+    : [];
+  const studentText = String(reflectionState.text || "").trim();
+
+  if (!selectedGrade || !selectedSubjects.length || !studentText) return null;
+
+  return {
+    mode,
+    request: {
+      grade: selectedGrade,
+      subjects: selectedSubjects,
+      explanation: {
+        intro: String(explanation.intro || "").trim(),
+        steps: Array.isArray(explanation.steps) ? explanation.steps.map((step) => String(step || "").trim()).filter(Boolean) : [],
+        visualExample: String(explanation.visualExample || "").trim(),
+      },
+      studentText,
+    },
+  };
+}
+
+function getStudyGuidedSchoolStage(grade) {
+  const normalizedGrade = String(grade || "").toLowerCase();
+  const match = normalizedGrade.match(/(\d+)/);
+  const gradeNumber = match ? Number(match[1]) : NaN;
+  return Number.isFinite(gradeNumber) && gradeNumber >= 1 && gradeNumber <= 5
+    ? "fundamental_1"
+    : "fundamental_2";
+}
+
+function buildStudyGuidedLocalProgressEvaluation(request) {
+  const schoolStage = getStudyGuidedSchoolStage(request?.grade);
+  const isFundamentalOne = schoolStage === "fundamental_1";
+  const studentWords = getStudyGuidedMeaningfulWords(request?.studentText || "");
+  const referenceKeywords = extractStudyGuidedReferenceKeywords(request?.explanation || {});
+  const studentWordSet = new Set(studentWords);
+  const matchedKeywords = referenceKeywords.filter((word) => studentWordSet.has(word));
+  const overlapRatio = referenceKeywords.length ? matchedKeywords.length / referenceKeywords.length : 0;
+  const ideaDensityFactor = isFundamentalOne
+    ? (studentWords.length >= 14 ? 1 : studentWords.length >= 10 ? 0.88 : studentWords.length >= 6 ? 0.7 : 0.42)
+    : (studentWords.length >= 18 ? 1 : studentWords.length >= 12 ? 0.9 : studentWords.length >= 8 ? 0.72 : 0.42);
+  const baseScore = Math.round(Math.min(100, overlapRatio * 100 * ideaDensityFactor));
+  const score = matchedKeywords.length === 0
+    ? 0
+    : Math.max(baseScore, studentWords.length >= (isFundamentalOne ? 7 : 10) ? 18 : 8);
+
+  let segments = 0;
+  if (studentWords.length >= (isFundamentalOne ? 3 : 4) && matchedKeywords.length >= 1) {
+    segments = Math.max(1, Math.min(
+      studyGuidedUnderstandingSegmentCount,
+      Math.round((score / 100) * studyGuidedUnderstandingSegmentCount),
+    ));
+  }
+
+  const minimumKeywordMatches = isFundamentalOne
+    ? Math.max(1, Math.min(3, Math.ceil(referenceKeywords.length * 0.18)))
+    : Math.max(2, Math.min(4, Math.ceil(referenceKeywords.length * 0.24)));
+  const canEvaluate = segments >= Math.ceil(studyGuidedUnderstandingSegmentCount / 2)
+    && matchedKeywords.length >= Math.max(1, minimumKeywordMatches - 1)
+    && studentWords.length >= (isFundamentalOne ? 5 : 8)
+    && overlapRatio >= (isFundamentalOne ? 0.12 : 0.18);
+  const isReady = matchedKeywords.length >= minimumKeywordMatches
+    && studentWords.length >= (isFundamentalOne ? 7 : 10)
+    && overlapRatio >= (isFundamentalOne ? 0.2 : 0.28);
+  if (isReady) {
+    segments = studyGuidedUnderstandingSegmentCount;
+  }
+
+  let message = "Comece a escrever com as ideias principais do que você entendeu.";
+  if (isReady) {
+    message = "Você atingiu um nível de entendimento, mas ainda precisa melhorar, clique em Avaliar.";
+  } else if (canEvaluate) {
+    message = "O botão de avaliar já foi liberado, mas sua barra ainda pode subir mais com complementações importantes.";
+  } else if (segments >= 6) {
+    message = isFundamentalOne
+      ? "Você já mostrou boa parte do conteúdo. Agora vale completar melhor a explicação."
+      : "Você já retomou boa parte das ideias centrais. Falta só organizar melhor o que compreendeu.";
+  } else if (segments >= 3) {
+    message = isFundamentalOne
+      ? "Sua escrita já mostra entendimento. Continue explicando com suas palavras."
+      : "Sua escrita já se aproxima do conteúdo. Continue explicando com suas palavras.";
+  } else if (segments >= 1) {
+    message = isFundamentalOne
+      ? "Já existem sinais de entendimento. Tente contar um pouco mais do que você aprendeu."
+      : "Já existem sinais de entendimento. Agora tente ligar melhor as ideias principais.";
+  }
+
+  return {
+    segments,
+    score,
+    canEvaluate,
+    isReady,
+    message,
+  };
+}
+
+function buildStudyGuidedLocalFinalEvaluation(request) {
+  const schoolStage = getStudyGuidedSchoolStage(request?.grade);
+  const isFundamentalOne = schoolStage === "fundamental_1";
+  const progress = buildStudyGuidedLocalProgressEvaluation(request);
+  const explanation = request?.explanation || {};
+  const referenceKeywords = extractStudyGuidedReferenceKeywords(request?.explanation || {});
+  const studentWordSet = new Set(getStudyGuidedMeaningfulWords(request?.studentText || ""));
+  const matchedKeywords = referenceKeywords.filter((word) => studentWordSet.has(word));
+  const missingKeywords = referenceKeywords.filter((word) => !studentWordSet.has(word)).slice(0, 3);
+  const steps = Array.isArray(explanation.steps) ? explanation.steps.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  const intro = String(explanation.intro || "").trim();
+  const didacticExplanation = steps.join(" ") || intro || "Retome as ideias centrais do conteúdo com suas palavras.";
+  const sampleAnswer = [intro, steps[0], steps[1]].filter(Boolean).join(" ") || didacticExplanation;
+
+  const positives = [];
+  if (matchedKeywords.length) {
+    positives.push(
+      isFundamentalOne
+        ? `Você já conseguiu lembrar ideias importantes do conteúdo, como ${matchedKeywords.slice(0, 3).join(", ")}.`
+        : `Você retomou ideias importantes do conteúdo, como ${matchedKeywords.slice(0, 3).join(", ")}.`,
+    );
+  }
+  if (progress.segments >= 4) {
+    positives.push(
+      isFundamentalOne
+        ? "Sua escrita mostra que você tentou explicar o conteúdo com suas próprias palavras."
+        : "Sua escrita já mostra que você não apenas copiou palavras soltas, mas tentou explicar o conteúdo com sentido.",
+    );
+  }
+  if (progress.segments >= studyGuidedUnderstandingSegmentCount) {
+    positives.push(
+      isFundamentalOne
+        ? "Sua resposta já mostra um entendimento claro do que foi estudado."
+        : "A resposta está organizada o suficiente para mostrar entendimento real da explicação feita anteriormente.",
+    );
+  }
+
+  const deepenings = [];
+  if (missingKeywords.length) {
+    deepenings.push(
+      isFundamentalOne
+        ? `Você ainda pode acrescentar melhor estas ideias: ${missingKeywords.join(", ")}.`
+        : `Vale acrescentar melhor estas ideias centrais: ${missingKeywords.join(", ")}.`,
+    );
+  }
+  if (progress.segments < studyGuidedUnderstandingSegmentCount) {
+    deepenings.push(
+      isFundamentalOne
+        ? "Tente explicar de forma mais completa como as ideias do conteúdo se ligam."
+        : "Explique com mais clareza como as ideias do conteúdo se ligam entre si, em vez de escrever apenas partes isoladas.",
+    );
+  }
+  if (studentWordSet.size < 12) {
+    deepenings.push(
+      isFundamentalOne
+        ? "Escreva um pouco mais para mostrar melhor o que você entendeu."
+        : "Escreva um pouco mais, com frases completas, para mostrar melhor o que você realmente entendeu.",
+    );
+  }
+
+  return {
+    analysis: progress.isReady
+      ? (isFundamentalOne
+        ? "Sua escrita mostra um bom entendimento do conteúdo e já explica as ideias principais com clareza."
+        : "Sua escrita demonstra um bom nível de compreensão do conteúdo e já organiza as ideias centrais com sentido.")
+      : (progress.canEvaluate
+        ? (isFundamentalOne
+          ? "Sua escrita já mostra entendimento parcial consistente do conteúdo, mas ainda pode ficar mais completa."
+          : "Sua escrita já demonstra compreensão parcial consistente do conteúdo, mas ainda precisa aprofundar alguns pontos centrais.")
+        : (isFundamentalOne
+          ? "Sua escrita começou a mostrar entendimento do conteúdo, mas ainda faltam ideias importantes para completar a explicação."
+          : "Sua escrita já toca no tema, mas ainda faltam ideias importantes para mostrar compreensão mais completa do conteúdo.")),
+    positives: positives.slice(0, 3),
+    deepenings: deepenings.slice(0, 3),
+    didacticExplanation,
+    sampleAnswer,
+    summary: progress.isReady
+      ? (isFundamentalOne
+        ? "Sua Lousa já mostra um bom entendimento do conteúdo. Agora você pode só deixar a explicação ainda mais completa."
+        : "Sua Lousa já mostra um bom entendimento do conteúdo, mas sempre dá para deixar a explicação ainda mais clara e completa.")
+      : (isFundamentalOne
+        ? "Você já começou bem, mas ainda precisa completar melhor algumas ideias importantes do conteúdo."
+        : "Você já começou a construir o entendimento, mas ainda precisa reforçar algumas ideias centrais para a Lousa ficar mais completa."),
+  };
+}
+
+function clearStudyGuidedReflectionTimers() {
+  if (studyGuidedReflectionAnalysisDebounceId) {
+    window.clearTimeout(studyGuidedReflectionAnalysisDebounceId);
+    studyGuidedReflectionAnalysisDebounceId = 0;
+  }
+  if (studyGuidedReflectionStagnationTimeoutId) {
+    window.clearTimeout(studyGuidedReflectionStagnationTimeoutId);
+    studyGuidedReflectionStagnationTimeoutId = 0;
+  }
+}
+
+function updateStudyGuidedReflectionProgress(result, options = {}) {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) return;
+
+  const previousSegments = Math.max(0, Number(studyGuidedReflectionState.progressSegments || 0));
+  const nextSegments = Math.max(0, Math.min(studyGuidedUnderstandingSegmentCount, Number(result?.segments || 0)));
+  const now = Date.now();
+  const progressed = nextSegments > previousSegments;
+
+  studyGuidedReflectionState = {
+    ...studyGuidedReflectionState,
+    progressSegments: nextSegments,
+    progressScore: Math.max(0, Math.min(100, Number(result?.score || 0))),
+    progressSource: String(result?._evaluationSource || result?.source || "").trim(),
+    progressNotice: String(result?._evaluationNotice || result?.notice || "").trim(),
+    canEvaluate: Boolean(result?.canEvaluate),
+    readyToEvaluate: Boolean(result?.isReady),
+    progressMessage: String(result?.message || "").trim(),
+    lastProgressAt: progressed
+      ? now
+      : (studyGuidedReflectionState.lastProgressAt || now),
+    promptShown: progressed ? false : studyGuidedReflectionState.promptShown,
+    finalEvaluation: options.preserveFinalEvaluation ? studyGuidedReflectionState.finalEvaluation : null,
+  };
+
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function setStudyGuidedReflectionPromptShown(value) {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) return;
+  studyGuidedReflectionState = {
+    ...studyGuidedReflectionState,
+    promptShown: Boolean(value),
+  };
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function resetStudyGuidedReflectionPromptCycle() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) return;
+  studyGuidedReflectionState = {
+    ...studyGuidedReflectionState,
+    lastProgressAt: Date.now(),
+    promptShown: false,
+  };
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function setStudyGuidedReflectionReviewUnlocked(value) {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) return;
+  studyGuidedReflectionState = {
+    ...studyGuidedReflectionState,
+    reviewUnlocked: Boolean(value),
+  };
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function closeStudyGuidedReplayModal() {
+  if (studyGuidedReplayOverlay) {
+    studyGuidedReplayOverlay.hidden = true;
+  }
+  if (studyGuidedReplayModal) {
+    studyGuidedReplayModal.hidden = true;
+  }
+}
+
+function settleStudyGuidedReplayModal(value) {
+  const resolver = studyGuidedReplayResolve;
+  studyGuidedReplayResolve = null;
+  closeStudyGuidedReplayModal();
+  if (typeof resolver === "function") {
+    resolver(Boolean(value));
+  }
+}
+
+function openStudyGuidedReplayModal(message) {
+  if (!studyGuidedReplayOverlay || !studyGuidedReplayModal || !studyGuidedReplayMessage) {
+    return Promise.resolve(false);
+  }
+
+  studyGuidedReplayMessage.textContent = message;
+  studyGuidedReplayOverlay.hidden = false;
+  studyGuidedReplayModal.hidden = false;
+
+  return new Promise((resolve) => {
+    studyGuidedReplayResolve = resolve;
+  });
+}
+
+function closeStudyGuidedAudioWaitModal() {
+  if (studyGuidedAudioWaitOverlay) {
+    studyGuidedAudioWaitOverlay.hidden = true;
+  }
+  if (studyGuidedAudioWaitModal) {
+    studyGuidedAudioWaitModal.hidden = true;
+  }
+}
+
+function openStudyGuidedAudioWaitModal(message = "O áudio já vai começar") {
+  if (!studyGuidedAudioWaitOverlay || !studyGuidedAudioWaitModal || !studyGuidedAudioWaitMessage) {
+    return;
+  }
+
+  studyGuidedAudioWaitMessage.textContent = message;
+  studyGuidedAudioWaitOverlay.hidden = false;
+  studyGuidedAudioWaitModal.hidden = false;
+}
+
+function setStudyGuidedFinalEvaluation(result) {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  if (!currentSignature || studyGuidedReflectionState.signature !== currentSignature) return;
+  studyGuidedReflectionState = {
+    ...studyGuidedReflectionState,
+    finalEvaluation: result && typeof result === "object"
+      ? {
+        analysis: String(result.analysis || "").trim(),
+        positives: Array.isArray(result.positives) ? result.positives.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4) : [],
+        deepenings: Array.isArray(result.deepenings) ? result.deepenings.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4) : [],
+        didacticExplanation: String(result.didacticExplanation || "").trim(),
+        sampleAnswer: String(result.sampleAnswer || "").trim(),
+        summary: String(result.summary || "").trim(),
+        source: String(result?._evaluationSource || result?.source || "").trim(),
+        notice: String(result?._evaluationNotice || result?.notice || "").trim(),
+      }
+      : null,
+  };
+  localStorage.setItem(studyGuidedReflectionStorageKey, JSON.stringify(studyGuidedReflectionState));
+}
+
+function buildStudyGuidedProgressBarMarkup(activeSegments) {
+  return Array.from({ length: studyGuidedUnderstandingSegmentCount }, (_, index) => {
+    const segmentNumber = index + 1;
+    return `<span class="study-guided-reflection-progress-segment${segmentNumber <= activeSegments ? " is-active" : ""}" aria-hidden="true"></span>`;
+  }).join("");
+}
+
+function buildStudyGuidedFinalEvaluationHtml(evaluation) {
+  if (!evaluation) return "";
+
+  const analysis = String(evaluation.analysis || "").trim();
+  const positives = Array.isArray(evaluation.positives) ? evaluation.positives.filter(Boolean) : [];
+  const deepenings = Array.isArray(evaluation.deepenings) ? evaluation.deepenings.filter(Boolean) : [];
+  const didacticExplanation = String(evaluation.didacticExplanation || "").trim();
+  const sampleAnswer = String(evaluation.sampleAnswer || "").trim();
+  const summary = String(evaluation.summary || "").trim();
+
+  return `
+    ${analysis ? `<p class="study-guided-reflection-feedback-summary">🧠 Análise da resposta<br>${escapeHtml(analysis)}</p>` : ""}
+    ${positives.length ? `
+      <div class="study-guided-reflection-feedback-block">
+        <h5 class="study-guided-reflection-feedback-title">Pontos positivos</h5>
+        <ul class="study-guided-reflection-feedback-list">
+          ${positives.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </div>
+    ` : ""}
+    ${deepenings.length ? `
+      <div class="study-guided-reflection-feedback-block">
+        <h5 class="study-guided-reflection-feedback-title">O que poderia ser aprofundado</h5>
+        <ul class="study-guided-reflection-feedback-list">
+          ${deepenings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </div>
+    ` : ""}
+    ${didacticExplanation ? `
+      <div class="study-guided-reflection-feedback-block">
+        <h5 class="study-guided-reflection-feedback-title">Explicação completa</h5>
+        <p class="study-guided-reflection-feedback-summary">${escapeHtml(didacticExplanation)}</p>
+      </div>
+    ` : ""}
+    ${sampleAnswer ? `
+      <div class="study-guided-reflection-feedback-block">
+        <h5 class="study-guided-reflection-feedback-title">Exemplo de resposta completa</h5>
+        <p class="study-guided-reflection-feedback-summary">${escapeHtml(sampleAnswer)}</p>
+      </div>
+    ` : ""}
+    ${summary ? `<p class="study-guided-reflection-feedback-summary">${escapeHtml(summary)}</p>` : ""}
+  `;
+}
+
+function buildStudyGuidedFinalEvaluationLoadingHtml() {
+  return `
+    <div class="study-guided-reflection-feedback-block">
+      <h5 class="study-guided-reflection-feedback-title">Avaliação da Lousa</h5>
+      <p class="study-guided-reflection-feedback-summary">A IA está avaliando o que foi escrito na Lousa.</p>
+    </div>
+  `;
+}
+
+function hasStudyGuidedFinalEvaluationContent(result) {
+  if (!result || typeof result !== "object") return false;
+  const analysis = String(result.analysis || "").trim();
+  const positives = Array.isArray(result.positives) ? result.positives.filter(Boolean) : [];
+  const deepenings = Array.isArray(result.deepenings) ? result.deepenings.filter(Boolean) : [];
+  const didacticExplanation = String(result.didacticExplanation || "").trim();
+  const sampleAnswer = String(result.sampleAnswer || "").trim();
+  const summary = String(result.summary || "").trim();
+  return Boolean(analysis || positives.length || deepenings.length || didacticExplanation || sampleAnswer || summary);
+}
+
+function triggerStudyGuidedFinalEvaluationFromUi(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  void handleStudyGuidedFinalEvaluation();
+}
+
+function bindStudyGuidedReflectionEvaluateButton() {
+  if (!studyGuidedExplanationBody) return;
+
+  const evaluateButton = studyGuidedExplanationBody.querySelector("[data-study-guided-evaluate]");
+  if (!(evaluateButton instanceof HTMLButtonElement)) return;
+  if (evaluateButton.dataset.evaluateBound === "true") return;
+
+  evaluateButton.dataset.evaluateBound = "true";
+  evaluateButton.onclick = triggerStudyGuidedFinalEvaluationFromUi;
+  evaluateButton.onpointerup = triggerStudyGuidedFinalEvaluationFromUi;
+  evaluateButton.ontouchend = triggerStudyGuidedFinalEvaluationFromUi;
+  evaluateButton.addEventListener("click", triggerStudyGuidedFinalEvaluationFromUi);
+}
+
+function refreshStudyGuidedReflectionUi() {
+  if (!studyGuidedExplanationBody) return;
+
+  updateStudyGuidedReflectionBlurState();
+  updateStudyGuidedReflectionTextareaVisualState();
+
+  const reflectionState = getStudyGuidedReflectionStateForCurrentExplanation();
+  const track = studyGuidedExplanationBody.querySelector("[data-study-guided-progress-track]");
+  const message = studyGuidedExplanationBody.querySelector("[data-study-guided-progress-message]");
+  const origin = studyGuidedExplanationBody.querySelector("[data-study-guided-progress-origin]");
+  const notice = studyGuidedExplanationBody.querySelector("[data-study-guided-progress-notice]");
+  const evaluateButton = studyGuidedExplanationBody.querySelector("[data-study-guided-evaluate]");
+  const feedback = studyGuidedExplanationBody.querySelector("[data-study-guided-evaluation-feedback]");
+
+  if (track) {
+    track.innerHTML = buildStudyGuidedProgressBarMarkup(reflectionState.progressSegments || 0);
+  }
+
+  if (message) {
+    const text = studyGuidedReflectionAnalyzing
+      ? "A IA está comparando sua escrita com a explicação."
+      : String(reflectionState.progressMessage || "").trim();
+    message.textContent = text;
+    message.hidden = !text;
+  }
+
+  if (origin) {
+    origin.hidden = true;
+    origin.textContent = "";
+  }
+
+  if (notice) {
+    notice.hidden = true;
+    notice.textContent = "";
+  }
+
+  if (evaluateButton) {
+    evaluateButton.hidden = !canStudyGuidedReflectionBeEvaluated(reflectionState);
+    evaluateButton.disabled = Boolean(studyGuidedReflectionEvaluating);
+    evaluateButton.textContent = studyGuidedReflectionEvaluating ? "Avaliando..." : "Avaliar";
+  }
+
+  if (feedback) {
+    const html = studyGuidedReflectionEvaluating && !reflectionState.finalEvaluation
+      ? buildStudyGuidedFinalEvaluationLoadingHtml()
+      : buildStudyGuidedFinalEvaluationHtml(reflectionState.finalEvaluation);
+    feedback.innerHTML = html;
+    feedback.hidden = !html;
+  }
+
+  refreshStudyGuidedTestUi();
+}
+
+function scheduleStudyGuidedStagnationPrompt() {
+  if (studyGuidedReflectionStagnationTimeoutId) {
+    window.clearTimeout(studyGuidedReflectionStagnationTimeoutId);
+    studyGuidedReflectionStagnationTimeoutId = 0;
+  }
+
+  const reflectionState = getStudyGuidedReflectionStateForCurrentExplanation();
+  const text = String(reflectionState.text || "").trim();
+  if (!text || !reflectionState.finalEvaluation || reflectionState.promptShown) {
+    return;
+  }
+
+  const baseTimestamp = Math.max(0, Number(reflectionState.lastProgressAt || 0)) || Date.now();
+  const elapsed = Date.now() - baseTimestamp;
+  const remaining = Math.max(0, studyGuidedStagnationPromptDelayMs - elapsed);
+
+  studyGuidedReflectionStagnationTimeoutId = window.setTimeout(async () => {
+    const latestState = getStudyGuidedReflectionStateForCurrentExplanation();
+    if (!String(latestState.text || "").trim() || !latestState.finalEvaluation || latestState.promptShown) {
+      return;
+    }
+
+    setStudyGuidedReflectionPromptShown(true);
+    const wantsReplay = await openStudyGuidedReplayModal("Você gostaria de reler toda a explicação antes de continuar escrevendo na Lousa?");
+    if (wantsReplay) {
+      setStudyGuidedReflectionReviewUnlocked(true);
+    }
+    resetStudyGuidedReflectionPromptCycle();
+    refreshStudyGuidedReflectionUi();
+    scheduleStudyGuidedStagnationPrompt();
+  }, remaining);
+}
+
+async function requestAiStudyGuidedWritingEvaluation(mode = "progress") {
+  const payload = buildStudyGuidedWritingEvaluationRequest(mode);
+  if (!payload) {
+    throw new Error("A escrita da Lousa ainda não está pronta para avaliação.");
+  }
+
+  return mode === "final"
+    ? buildStudyGuidedLocalFinalEvaluation(payload.request)
+    : buildStudyGuidedLocalProgressEvaluation(payload.request);
+}
+
+async function runStudyGuidedReflectionProgressAnalysis() {
+  const text = getStudyGuidedReflectionText().trim();
+  if (!text) {
+    clearStudyGuidedReflectionTimers();
+    return;
+  }
+
+  const requestToken = ++studyGuidedReflectionRequestToken;
+  studyGuidedReflectionAnalyzing = true;
+  refreshStudyGuidedReflectionUi();
+
+  try {
+    const result = await requestAiStudyGuidedWritingEvaluation("progress");
+    if (requestToken !== studyGuidedReflectionRequestToken) return;
+    updateStudyGuidedReflectionProgress(result, { preserveFinalEvaluation: true });
+    refreshStudyGuidedReflectionUi();
+    scheduleStudyGuidedStagnationPrompt();
+  } finally {
+    if (requestToken === studyGuidedReflectionRequestToken) {
+      studyGuidedReflectionAnalyzing = false;
+      refreshStudyGuidedReflectionUi();
+    }
+  }
+}
+
+function queueStudyGuidedReflectionProgressAnalysis() {
+  if (studyGuidedReflectionAnalysisDebounceId) {
+    window.clearTimeout(studyGuidedReflectionAnalysisDebounceId);
+  }
+  studyGuidedReflectionAnalysisDebounceId = window.setTimeout(() => {
+    studyGuidedReflectionAnalysisDebounceId = 0;
+    void runStudyGuidedReflectionProgressAnalysis();
+  }, 1200);
+}
+
+async function handleStudyGuidedFinalEvaluation() {
+  if (studyGuidedReflectionEvaluating) return;
+  const reflectionState = getStudyGuidedReflectionStateForCurrentExplanation();
+  if (!canStudyGuidedReflectionBeEvaluated(reflectionState)) return;
+
+  studyGuidedReflectionEvaluating = true;
+  const payload = buildStudyGuidedWritingEvaluationRequest("final");
+  if (!payload) {
+    studyGuidedReflectionEvaluating = false;
+    refreshStudyGuidedReflectionUi();
+    return;
+  }
+  setStudyGuidedFinalEvaluation(null);
+  refreshStudyGuidedReflectionUi();
+
+  try {
+    const result = await requestAiStudyGuidedWritingEvaluation("final");
+    const safeResult = hasStudyGuidedFinalEvaluationContent(result)
+      ? result
+      : {
+        ...buildStudyGuidedLocalFinalEvaluation(payload.request),
+        _evaluationSource: "fallback",
+        _evaluationNotice: "A avaliação final voltou vazia e foi refeita com o fallback local.",
+      };
+
+    setStudyGuidedFinalEvaluation(safeResult);
+    resetStudyGuidedReflectionPromptCycle();
+    scheduleStudyGuidedStagnationPrompt();
+  } catch (error) {
+    window.alert(getErrorMessage(error, "Não foi possível avaliar a Lousa agora."));
+  } finally {
+    studyGuidedReflectionEvaluating = false;
+    refreshStudyGuidedReflectionUi();
+  }
+}
 
 function isClipboardUnlocked(target) {
   return target?.dataset?.clipboardUnlocked === "true";
@@ -636,12 +1685,19 @@ function setParentDashboardMode(mode) {
 }
 
 function getStudyGuidedKnowledge() {
-  return String(localStorage.getItem(studyGuidedKnowledgeStorageKey) || "").trim();
+  const rawValue = String(localStorage.getItem(studyGuidedKnowledgeStorageKey) || "");
+  const trimmedValue = rawValue.trim();
+  if (legacyStudyGuidedKnowledgePlaceholders.has(trimmedValue)) {
+    localStorage.removeItem(studyGuidedKnowledgeStorageKey);
+    return "";
+  }
+  return trimmedValue;
 }
 
 function setStudyGuidedKnowledge(value) {
   const normalizedValue = String(value || "");
-  if (!normalizedValue.trim()) {
+  const trimmedValue = normalizedValue.trim();
+  if (!trimmedValue || legacyStudyGuidedKnowledgePlaceholders.has(trimmedValue)) {
     localStorage.removeItem(studyGuidedKnowledgeStorageKey);
     return;
   }
@@ -1180,6 +2236,85 @@ function validateDissertativeAnswer(question, answer) {
   return candidates.some((candidate) => computeSimilarityScore(answer, candidate, question?.text || "") >= 0.64);
 }
 
+function buildDissertativeEvaluation(question, answer) {
+  const responseText = String(answer || "").trim();
+  const expectedAnswers = getQuestionExpectedAnswers(question);
+  const bestExpected = expectedAnswers[0] || "";
+  const bestScore = expectedAnswers.reduce((highest, candidate) => {
+    return Math.max(highest, computeSimilarityScore(responseText, candidate, question?.text || ""));
+  }, 0);
+  const expectedTokens = extractMeaningfulTokens(bestExpected);
+  const answerTokens = extractMeaningfulTokens(responseText);
+  const sharedTokens = expectedTokens.filter((token) => answerTokens.includes(token));
+  const missingTokens = expectedTokens.filter((token) => !answerTokens.includes(token));
+  const explanation = getExplanationForQuestion(question);
+
+  let level = "initial";
+  if (bestScore >= 0.76) {
+    level = "complete";
+  } else if (bestScore >= 0.45) {
+    level = "partial";
+  }
+
+  const analysisByLevel = {
+    complete: "Sua resposta está dentro do contexto da matéria e mostra boa compreensão do que a questão queria avaliar.",
+    partial: "Sua resposta está no contexto da matéria e mostra compreensão parcial do conteúdo, mas ainda pode ficar mais completa.",
+    initial: "Sua resposta toca no tema, mas ainda demonstra pouca precisão nos conceitos principais pedidos pela questão.",
+  };
+
+  const positiveLines = [];
+  if (responseText) {
+    positiveLines.push("Você tentou responder com suas próprias palavras, o que é importante em questões abertas.");
+  }
+  if (sharedTokens.length) {
+    positiveLines.push(`Você mencionou ideias centrais do conteúdo, como ${sharedTokens.slice(0, 3).join(", ")}.`);
+  }
+  if (level === "complete") {
+    positiveLines.push("A resposta mostra que você compreendeu bem a relação entre o enunciado e o conteúdo estudado.");
+  } else if (level === "partial") {
+    positiveLines.push("Há sinais de compreensão do tema, mesmo que a resposta ainda precise de alguns ajustes.");
+  }
+  if (!positiveLines.length) {
+    positiveLines.push("Sua resposta está relacionada ao tema da questão.");
+  }
+
+  const deepenLines = [];
+  if (missingTokens.length) {
+    deepenLines.push(`Vale aprofundar pontos como ${missingTokens.slice(0, 4).join(", ")}.`);
+  }
+  if (level === "partial") {
+    deepenLines.push("Tente ligar melhor sua resposta ao que o enunciado pediu de forma mais direta.");
+  }
+  if (level === "initial") {
+    deepenLines.push("Faltou trazer os conceitos essenciais que conectam sua resposta ao conteúdo estudado.");
+    deepenLines.push("Tente explicar a ideia principal com mais clareza e com um exemplo do próprio conteúdo.");
+  }
+  if (!deepenLines.length) {
+    deepenLines.push("Sua resposta já cobre bem o essencial; agora o foco pode ser deixar a explicação ainda mais clara.");
+  }
+
+  const sampleAnswer = bestExpected || explanation.explanation || "Uma resposta completa precisa retomar os conceitos centrais do conteúdo estudado.";
+
+  return {
+    score: bestScore,
+    mastered: bestScore >= 0.64,
+    level,
+    analysis: analysisByLevel[level],
+    positives: positiveLines,
+    deepenings: deepenLines,
+    didacticExplanation: explanation.explanation,
+    sampleAnswer,
+    feedbackTitle: level === "complete"
+      ? "🧠 Boa compreensão demonstrada"
+      : level === "partial"
+        ? "🧠 Compreensão em desenvolvimento"
+        : "🧠 Vamos aprofundar essa resposta",
+    supportText: level === "complete"
+      ? "Você mostrou entendimento do conteúdo. Vamos seguir."
+      : "Sua resposta pode ficar mais forte com alguns ajustes.",
+  };
+}
+
 function syncNativeTestState() {
   if (!window.SmartUnlockNative) {
     return;
@@ -1512,6 +2647,7 @@ function renderAiDashboardConfig() {
     aiDashboardTypeText.checked = shouldReuseDraft ? Boolean(draft.questionTypes?.text) : false;
   }
   if (aiDashboardKnowledge) {
+    aiDashboardKnowledge.placeholder = studyGuidedKnowledgePlaceholder;
     aiDashboardKnowledge.value = parentDashboardMode === "study-guided"
       ? getStudyGuidedKnowledge()
       : (shouldReuseDraft ? draft.knowledge : "");
@@ -1613,6 +2749,9 @@ Regras adicionais:
 - Se knowledgeBase trouxer uma linha por matéria, associar corretamente cada tema à matéria correspondente.
 - Se knowledgeBase trouxer um único tema geral, adaptá-lo às matérias selecionadas.
 - Nunca use uma matéria não listada em "subjects", nem como tema principal escondido dentro da questão.
+- Em questão de múltipla escolha, o campo "text" deve trazer apenas o enunciado.
+- Nunca inclua A), B), C) ou D) dentro do campo "text".
+- Em múltipla escolha, as quatro alternativas devem aparecer somente em "options".
 - Retorne apenas JSON válido.`;
 }
 
@@ -1636,7 +2775,9 @@ function getAiApiConfig() {
     baseUrl: String(rawConfig.baseUrl || "").trim(),
     generateQuestionsPath: String(rawConfig.generateQuestionsPath || "/api/ai/generate-questions").trim() || "/api/ai/generate-questions",
     generateStudyPath: String(rawConfig.generateStudyPath || "/api/ai/generate-study-explanation").trim() || "/api/ai/generate-study-explanation",
+    generateStudyFollowupPath: String(rawConfig.generateStudyFollowupPath || "/api/ai/generate-study-followup").trim() || "/api/ai/generate-study-followup",
     generateStudyAudioPath: String(rawConfig.generateStudyAudioPath || "/api/ai/generate-study-audio").trim() || "/api/ai/generate-study-audio",
+    evaluateStudyWritingPath: String(rawConfig.evaluateStudyWritingPath || "/api/ai/evaluate-study-writing").trim() || "/api/ai/evaluate-study-writing",
     timeoutMs: Math.max(1000, Number(rawConfig.timeoutMs || 30000)),
   };
 }
@@ -1657,12 +2798,28 @@ function getAiGenerateStudyUrl(config = getAiApiConfig()) {
   return new URL(config.generateStudyPath, config.baseUrl).toString();
 }
 
+function getAiGenerateStudyFollowupUrl(config = getAiApiConfig()) {
+  if (!config.baseUrl) {
+    return config.generateStudyFollowupPath;
+  }
+
+  return new URL(config.generateStudyFollowupPath, config.baseUrl).toString();
+}
+
 function getAiGenerateStudyAudioUrl(config = getAiApiConfig()) {
   if (!config.baseUrl) {
     return config.generateStudyAudioPath;
   }
 
   return new URL(config.generateStudyAudioPath, config.baseUrl).toString();
+}
+
+function getAiEvaluateStudyWritingUrl(config = getAiApiConfig()) {
+  if (!config.baseUrl) {
+    return config.evaluateStudyWritingPath;
+  }
+
+  return new URL(config.evaluateStudyWritingPath, config.baseUrl).toString();
 }
 
 async function requestAiGeneratedQuestions(payload) {
@@ -1718,10 +2875,13 @@ async function requestAiGeneratedQuestions(payload) {
       errorMessage: "",
     };
   } catch (error) {
+    const normalizedErrorMessage = error?.name === "AbortError"
+      ? "A geração do teste demorou mais do que o esperado. Tente novamente."
+      : (error instanceof Error ? error.message : "Falha desconhecida na API.");
     console.warn("Versão IA: usando fallback simulado após falha na API.", error);
     return {
       ...buildSimulatedResult(),
-      errorMessage: error instanceof Error ? error.message : "Falha desconhecida na API.",
+      errorMessage: normalizedErrorMessage,
     };
   } finally {
     if (timeoutId) {
@@ -1942,9 +3102,9 @@ Instruções obrigatórias:
 - Quando a matéria e o ano forem definidos, trate essa combinação como obrigatória em toda a resposta.
 - Faça essa validação internamente.
 - Não escreva na resposta frases como "esse conteúdo é coerente com..." ou "está adequado ao ano...".
-- A seção "intro" deve começar explicando diretamente o conteúdo enviado, em vez de comentar a validação.
-- Se o conteúdo digitado for "Coração", por exemplo, a intro deve resumir o que é o coração.
-- Se o conteúdo vier por imagem, a intro deve resumir o tema principal identificado na imagem.
+- A seção "intro" deve começar resumindo diretamente o conteúdo enviado, em vez de comentar a validação.
+- Se o conteúdo digitado for "Coração", por exemplo, a intro deve resumir em poucas linhas o que é o coração.
+- Se o conteúdo vier por imagem, a intro deve resumir em poucas linhas o tema principal identificado na imagem.
 - Mantenha o texto original do conteúdo como base.
 - Faça uma explicação abrangente o suficiente para garantir entendimento real do conteúdo.
 - Priorize os pontos mais importantes e explique o que realmente precisa ser compreendido.
@@ -1955,16 +3115,40 @@ Instruções obrigatórias:
 - Não deixe nenhum trecho com aparência de rascunho, frase solta, quebra estranha ou construção mal acabada.
 - Use um tom didático, claro, humano e fluido, como um(a) professor(a) explicando em sala para alunos que estão vendo o assunto pela primeira vez.
 - Organize a resposta em etapas claras e progressivas.
-- A introdução deve explicar o conteúdo com naturalidade, sem começar com frases como "o texto mostra", "o conteúdo mostra" ou "o material mostra".
+- A introdução deve resumir o conteúdo com naturalidade, sem começar com frases como "o texto mostra", "o conteúdo mostra" ou "o material mostra".
+- A seção "intro" deve funcionar como um resumo curto do conteúdo.
+- Prefira de 2 a 4 frases curtas na "intro".
+- Não transforme a "intro" em uma explicação longa; a explicação detalhada fica na seção "steps".
+- Se o conteúdo enviado for um enunciado de exercício ou uma atividade, trate isso como prioridade máxima na seção "steps".
+- Em exercícios e atividades, sua principal função NÃO é resolver imediatamente.
+- Primeiro, ajude a aluna a entender o enunciado, traduzindo o texto para uma linguagem simples, clara e acessível.
+- Em exercícios e atividades, nunca assuma que a aluna entendeu o enunciado.
+- Explique primeiro e calcule ou resolva depois.
+- Em exercícios e atividades, use linguagem de professor(a) de Ensino Fundamental II, especialmente como um(a) professor(a) de 9º ano: didática forte, frases claras, ótima gramática e zero enrolação.
+- Se o enunciado estiver confuso, mostre primeiro uma versão simplificada antes da resolução.
+- Mostre com clareza: o que a questão quer saber, quais dados importam, o que pode confundir e qual caminho a aluna deve seguir para responder.
 - A seção "steps" deve ter apenas a quantidade de etapas realmente necessária para o entendimento.
 - Faça internamente um cálculo de importância textual: se o conteúdo exigir mais desenvolvimento, aumente os passos; se exigir menos, reduza.
-- Normalmente use entre 3 e 6 etapas.
-- Cada etapa deve desenvolver uma ideia importante com clareza e de forma enxuta.
-- Prefira uma frase por etapa. Use duas apenas quando for realmente necessário.
+- Prefira entre 3 e 5 etapas. Na maioria dos casos, use 3 ou 4.
+- Cada etapa deve desenvolver uma única ideia importante com clareza e de forma enxuta.
+- Prefira uma frase curta por etapa. Use duas frases curtas apenas quando isso for realmente necessário para o entendimento.
 - Evite blocos longos dentro de um mesmo passo.
 - Quando uma ideia puder ser dita com menos palavras sem perder entendimento, escolha a forma mais curta.
 - Evite repetir o que já foi explicado na introdução.
-- Cada passo deve ir direto ao ponto.
+- Cada passo deve ir direto ao ponto, mas com informação suficiente para o aluno realmente entender a ideia explicada.
+- Em conteúdos mais simples, reduza a quantidade de texto dentro de cada passo.
+- Em enunciados de exercício e atividades, a seção "steps" deve seguir obrigatoriamente esta ordem:
+- Passo 1 - Reescreva o enunciado: reescreva com palavras simples, como se estivesse explicando para uma aluna de 13 a 15 anos; elimine palavras difíceis; divida frases longas em frases curtas; mantenha exatamente o mesmo significado.
+- Passo 2 - Identifique as informações importantes: use o formato "O que sabemos:" e liste apenas os dados realmente importantes.
+- Passo 3 - Traduza o português da questão para a lógica da disciplina: deixe claro o que cada frase quer dizer dentro da matéria escolhida.
+- Se a matéria for Matemática, no passo 3 monte também uma tabela com duas colunas: "Palavra ou frase" e "Significado matemático". Inclua expressões do tipo soma, diferença, dobro, triplo, metade, maior que, menor que e outras equivalentes encontradas no enunciado.
+- Passo 4 - Defina as incógnitas ou elementos principais: explique com clareza "Vamos chamar..." e nomeie o que precisa ser descoberto.
+- Passo 5 - Monte a estrutura de resolução: mostre como cada frase do enunciado se transforma em conta, equação, relação, regra, argumento ou procedimento da matéria correspondente.
+- Passo 6 - Resolva: mostre apenas um passo por linha, sem pular etapas.
+- Passo 7 - Verifique a resposta: substitua ou confira a resposta no problema original e mostre por que ela faz sentido.
+- Passo 8 - Fechamento: explique em até 3 frases o que o exercício queria, como foi traduzido para a linguagem da matéria e qual foi a resposta final.
+- Em Matemática, preserve explicitamente a diferença entre "texto" e "matemática".
+- Em outras matérias, preserve explicitamente a diferença entre "o que a questão está pedindo" e "como responder corretamente".
 - O exemplo deve ajudar o aluno a visualizar ou sentir o conteúdo em uma situação real da vida.
 - Ensine como um(a) professor(a) da matéria selecionada para o ano escolhido.
 - Quando houver exercícios, conduza a explicação como quem também resolve exercícios da matéria escolhida.
@@ -1984,6 +3168,8 @@ Instruções obrigatórias:
 - A seção "visualExample" deve funcionar apenas como um campo "Exemplo".
 - Não use wireframe, setas, esquemas de lousa ou diagramas textuais.
 - Nesse campo, explique o conteúdo em uma situação real da vida, usando analogias, comparações e exemplos simples que facilitem o entendimento.
+- Deixe o exemplo um pouco mais curto e direto do que a explicação principal, mas com contexto suficiente para facilitar o entendimento.
+- Sempre que possível, use 2 frases curtas ou 1 frase um pouco mais desenvolvida no exemplo.
 - Responda com profundidade suficiente para ensinar bem, mas sem exagerar em repetição.
 - Retorne apenas JSON válido.
 
@@ -2019,6 +3205,53 @@ function buildStudyGuidedPayload(selectionState = getStudyGuidedSelectionState()
   };
 }
 
+function buildStudyGuidedTestKnowledgeBase() {
+  if (!studyGuidedExplanationState?.explanation) return "";
+
+  const intro = normalizeStudyGuidedAudioText(studyGuidedExplanationState.explanation.intro || "");
+  const steps = Array.isArray(studyGuidedExplanationState.explanation.steps)
+    ? studyGuidedExplanationState.explanation.steps
+      .map(normalizeStudyGuidedStep)
+      .map((step) => normalizeStudyGuidedAudioText(step))
+      .filter(Boolean)
+    : [];
+
+  return [intro, ...steps].filter(Boolean).join("\n");
+}
+
+function buildStudyGuidedTestRequest(selectionState = getStudyGuidedSelectionState()) {
+  if (!selectionState?.ok || !selectionState.grade) return null;
+
+  const draft = getStudyGuidedTestDraft();
+  return {
+    grade: normalizeGradeLabel(selectionState.grade),
+    gradeGroup: getGradeGroupDisplayLabel(selectionState.grade),
+    subjects: Array.isArray(selectionState.subjects)
+      ? selectionState.subjects.map((subject) => normalizeSubjectName(subject)).filter(Boolean)
+      : [],
+    unlockMinutes: Math.max(1, Number(localStorage.getItem("smartUnlockMinutes") || unlockTimeSelect?.value || 1)),
+    count: Math.max(1, Number(draft.count || 5)),
+    questionTypes: {
+      choice: Boolean(draft.questionTypes?.choice),
+      text: Boolean(draft.questionTypes?.text),
+    },
+    knowledgeBase: buildStudyGuidedTestKnowledgeBase(),
+  };
+}
+
+function buildStudyGuidedTestPayload(selectionState = getStudyGuidedSelectionState()) {
+  const request = buildStudyGuidedTestRequest(selectionState);
+  if (!request) return null;
+
+  return {
+    request,
+    prompt: {
+      system: aiGenerationSystemPrompt,
+      user: buildAiGenerationUserPrompt(request),
+    },
+  };
+}
+
 function buildSimulatedStudyGuidedExplanation(payload) {
   const request = payload?.request || {};
   const subjectLabel = (request.subjects || []).map((subject) => getSubjectDisplayLabel(subject)).join(", ");
@@ -2035,16 +3268,15 @@ function buildSimulatedStudyGuidedExplanation(payload) {
       usedImages: Array.isArray(request.uploadedImages) ? request.uploadedImages.length : 0,
     },
     explanation: {
-      intro: `${firstTopic} é o ponto principal deste estudo. Vamos entender isso de forma clara, conectando a ideia central ao que mais importa nesse conteúdo.`,
+      intro: `${firstTopic} é o tema central deste estudo. Aqui vai um resumo curto com a ideia principal do conteúdo.`,
       steps: [
-        "1. Identifique a ideia principal do conteúdo enviado.",
-        "2. Explique os pontos mais importantes com linguagem simples.",
-        "3. Relacione o conteúdo à matéria e ao ano escolar escolhidos.",
-        "4. Mostre como esse conteúdo aparece na prática.",
-        "5. Feche retomando o que é mais importante guardar desse conteúdo.",
+        "Identifique a ideia principal do conteúdo enviado.",
+        "Explique os pontos mais importantes com linguagem simples.",
+        "Relacione o conteúdo à matéria escolhida de forma natural.",
+        "Feche retomando o que mais importa guardar.",
       ],
       visualExample: knowledgeText
-        ? `Exemplo: imagine uma situação do dia a dia em que "${firstTopic}" apareça de forma concreta, ajudando a perceber como esse conteúdo funciona fora da teoria.`
+        ? `Exemplo: imagine uma situação do dia a dia em que "${firstTopic}" apareça de forma simples e concreta, ajudando a perceber essa ideia com mais facilidade.`
         : "Essa informação não está no material enviado",
     },
   };
@@ -2182,6 +3414,125 @@ async function requestAiStudyGuidedExplanation(payload) {
       ...buildSimulatedResult(),
       errorMessage: error instanceof Error ? error.message : "Falha desconhecida na API.",
     };
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+}
+
+function buildStudyGuidedFollowupRequest(question, selectionState = getStudyGuidedSelectionState()) {
+  if (!selectionState?.ok || !studyGuidedExplanationState?.explanation) return null;
+
+  return {
+    grade: normalizeGradeLabel(selectionState.grade),
+    gradeGroup: getGradeGroupDisplayLabel(selectionState.grade),
+    subjects: Array.isArray(selectionState.subjects)
+      ? selectionState.subjects.map((subject) => normalizeSubjectName(subject)).filter(Boolean)
+      : [],
+    knowledgeBase: getStudyGuidedKnowledge(),
+    uploadedImages: studyGuidedUploadPreviewDataUrls.slice(0, 3),
+    explanation: {
+      intro: String(studyGuidedExplanationState.explanation.intro || "").trim(),
+      steps: Array.isArray(studyGuidedExplanationState.explanation.steps)
+        ? studyGuidedExplanationState.explanation.steps.map((step) => String(step || "").trim()).filter(Boolean)
+        : [],
+    },
+    history: getStudyGuidedConversationMessages().map((message) => ({
+      role: message.role,
+      text: message.text,
+    })),
+    question: String(question || "").trim(),
+  };
+}
+
+function buildStudyGuidedFollowupPayload(question, selectionState = getStudyGuidedSelectionState()) {
+  const request = buildStudyGuidedFollowupRequest(question, selectionState);
+  if (!request) return null;
+  return { request };
+}
+
+function parseStudyGuidedFollowupResponse(rawResponse) {
+  return {
+    source: rawResponse?.source === "api" ? "api" : "simulated",
+    compatible: rawResponse?.metadata?.isCompatible !== false,
+    message: String(rawResponse?.message || rawResponse?.answer || "").trim(),
+  };
+}
+
+function buildLocalStudyGuidedFollowup(payload) {
+  const request = payload?.request || {};
+  const question = String(request.question || "").trim();
+  const selectedSubjects = Array.isArray(request.subjects) ? request.subjects : [];
+  const selectedSubjectLabel = selectedSubjects.length ? getSubjectDisplayLabel(selectedSubjects[0]) : "";
+  const detectedSubject = detectStudyGuidedLikelySubjectFromText(question);
+
+  if (selectedSubjects.length !== 1 || (detectedSubject && detectedSubject !== selectedSubjectLabel)) {
+    return {
+      source: "simulated",
+      compatible: false,
+      message: studyGuidedFollowupInvalidMessage,
+    };
+  }
+
+  const intro = String(request.explanation?.intro || "").trim();
+  const steps = Array.isArray(request.explanation?.steps) ? request.explanation.steps.map((step) => String(step || "").trim()).filter(Boolean) : [];
+  const referenceSnippet = [intro, ...steps].filter(Boolean).join(" ").trim();
+  const shortenedReference = referenceSnippet.length > 460
+    ? `${referenceSnippet.slice(0, 457).trim()}...`
+    : referenceSnippet;
+
+  return {
+    source: "simulated",
+    compatible: true,
+    message: shortenedReference
+      ? `Vamos continuar dentro deste mesmo conteúdo. ${shortenedReference} Em relação à sua pergunta, observe como essa dúvida se conecta ao tema principal e aos pontos já explicados.`
+      : "Vamos continuar dentro deste mesmo conteúdo e aprofundar essa dúvida com base no que já foi estudado.",
+  };
+}
+
+async function requestAiStudyGuidedFollowup(payload) {
+  if (!payload?.request) {
+    throw new Error("A pergunta complementar ainda não está pronta para ser enviada.");
+  }
+
+  const config = getAiApiConfig();
+  if (config.providerMode !== "api") {
+    return buildLocalStudyGuidedFollowup(payload);
+  }
+
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), config.timeoutMs)
+    : null;
+
+  try {
+    const response = await fetch(getAiGenerateStudyFollowupUrl(config), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        request: payload.request,
+      }),
+      signal: controller?.signal,
+    });
+
+    if (!response.ok) {
+      let apiMessage = "";
+      try {
+        const errorPayload = await response.json();
+        apiMessage = String(errorPayload?.message || errorPayload?.error || "").trim();
+      } catch (_) {
+        apiMessage = "";
+      }
+      throw new Error(apiMessage || `A API respondeu com status ${response.status}.`);
+    }
+
+    return parseStudyGuidedFollowupResponse(await response.json());
+  } catch (error) {
+    console.warn("Estudo Guiado: usando resposta complementar local após falha na API.", error);
+    return buildLocalStudyGuidedFollowup(payload);
   } finally {
     if (timeoutId) {
       window.clearTimeout(timeoutId);
@@ -2481,6 +3832,111 @@ function clearAiGenerationState() {
   localStorage.removeItem(aiGenerationMetaStorageKey);
 }
 
+function getStudyGuidedTestQuestionBank() {
+  return normalizeQuestionBank(JSON.parse(localStorage.getItem(studyGuidedTestQuestionBankStorageKey) || "null"));
+}
+
+function saveStudyGuidedTestQuestionBank(bank) {
+  localStorage.setItem(
+    studyGuidedTestQuestionBankStorageKey,
+    JSON.stringify(normalizeQuestionBank(bank)),
+  );
+}
+
+function clearStudyGuidedTestQuestionBank() {
+  saveStudyGuidedTestQuestionBank(createEmptyQuestionBank());
+}
+
+function getStudyGuidedTestQuestionsForGrade(grade) {
+  return getStudyGuidedTestQuestionBank()[normalizeGradeLabel(grade)] || [];
+}
+
+function getStudyGuidedTestMeta() {
+  try {
+    const rawMeta = JSON.parse(localStorage.getItem(studyGuidedTestMetaStorageKey) || "null");
+    if (!rawMeta || typeof rawMeta !== "object") return null;
+    return {
+      signature: String(rawMeta.signature || "").trim(),
+      source: rawMeta.source === "api" ? "api" : "simulated",
+      generatedAt: String(rawMeta.generatedAt || ""),
+      count: Math.max(0, Number(rawMeta.count || 0)),
+      grade: normalizeGradeLabel(rawMeta.grade || ""),
+      errorMessage: String(rawMeta.errorMessage || "").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveStudyGuidedTestMeta(meta) {
+  localStorage.setItem(
+    studyGuidedTestMetaStorageKey,
+    JSON.stringify({
+      signature: String(meta?.signature || "").trim(),
+      source: meta?.source === "api" ? "api" : "simulated",
+      generatedAt: String(meta?.generatedAt || new Date().toISOString()),
+      count: Math.max(0, Number(meta?.count || 0)),
+      grade: normalizeGradeLabel(meta?.grade || ""),
+      errorMessage: String(meta?.errorMessage || "").trim(),
+    }),
+  );
+}
+
+function clearStudyGuidedTestGeneratedState(options = {}) {
+  clearStudyGuidedTestQuestionBank();
+  localStorage.removeItem(studyGuidedTestMetaStorageKey);
+  if (!options.preservePreviewOpen) {
+    saveStudyGuidedTestDraft({
+      ...getStudyGuidedTestDraft(),
+      previewOpen: false,
+    });
+  }
+}
+
+function syncStudyGuidedTestState() {
+  const currentSignature = getStudyGuidedExplanationSignature(studyGuidedExplanationState);
+  const currentDraft = getStudyGuidedTestDraft();
+  const currentMeta = getStudyGuidedTestMeta();
+
+  if (!currentSignature) {
+    saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
+    clearStudyGuidedTestQuestionBank();
+    localStorage.removeItem(studyGuidedTestMetaStorageKey);
+    return;
+  }
+
+  if (currentDraft.signature === currentSignature && (!currentMeta || currentMeta.signature === currentSignature)) {
+    return;
+  }
+
+  saveStudyGuidedTestDraft({
+    ...createDefaultStudyGuidedTestDraft(currentSignature),
+    count: currentDraft.count,
+    questionTypes: {
+      choice: Boolean(currentDraft.questionTypes?.choice ?? true),
+      text: Boolean(currentDraft.questionTypes?.text),
+    },
+    previewOpen: false,
+  });
+  clearStudyGuidedTestQuestionBank();
+  localStorage.removeItem(studyGuidedTestMetaStorageKey);
+}
+
+function replaceStudyGuidedTestQuestionsForGrade(grade, questionList) {
+  const normalizedGrade = normalizeGradeLabel(grade);
+  const questionBank = getStudyGuidedTestQuestionBank();
+  questionBank[normalizedGrade] = ensureFourOptions(
+    questionList.map((question) => ({
+      ...question,
+      grade: normalizedGrade,
+      age: Number(question.age || inferAgeFromGrade(normalizedGrade)),
+      subject: normalizeSubjectName(question.subject),
+    })),
+  );
+  saveStudyGuidedTestQuestionBank(questionBank);
+  return questionBank;
+}
+
 function getAiGenerationSourceLabel(source) {
   return source === "api" ? "API" : "Simulação";
 }
@@ -2681,18 +4137,7 @@ function closeTestLogoutModal() {
 }
 
 function openTestLogoutModal() {
-  if (!testLogoutOverlay || !testLogoutModal) {
-    return;
-  }
-  if (testLogoutError) {
-    testLogoutError.textContent = "";
-  }
-  if (testLogoutPasswordInput) {
-    testLogoutPasswordInput.value = "";
-  }
-  testLogoutOverlay.hidden = false;
-  testLogoutModal.hidden = false;
-  window.setTimeout(() => testLogoutPasswordInput?.focus(), 30);
+  forceResponsibleLogoutFromTest();
 }
 
 function showPasswordGate() {}
@@ -2700,6 +4145,7 @@ function showPasswordGate() {}
 function hidePasswordGate() {}
 
 function forceResponsibleLogoutFromTest() {
+  const returnDashboardMode = getParentDashboardMode();
   closeTestLogoutModal();
   closeProfileMenu(false);
   clearRetryRestartTimer();
@@ -2722,9 +4168,12 @@ function forceResponsibleLogoutFromTest() {
   if (manualUnlockButton) {
     manualUnlockButton.setAttribute("aria-pressed", "false");
   }
-  responsibleEntryAuthorized = false;
+  responsibleEntryAuthorized = true;
   clearResponsibleEntryForm();
-  setActiveView(responsibleEntryView ? "responsible-entry" : "parent");
+  if (returnDashboardMode === "study-guided" || returnDashboardMode === "tests") {
+    setParentDashboardMode(returnDashboardMode);
+  }
+  setActiveView("parent");
 }
 
 function setStudentGateMode(mode) {
@@ -2735,6 +4184,10 @@ function setStudentGateMode(mode) {
   supportText.hidden = isWelcome;
   actionRow.hidden = isWelcome;
   gradeLabel.hidden = isWelcome;
+  nextButton.classList.remove("test-summary-retry-button");
+  if (testSummaryExitButton) {
+    testSummaryExitButton.hidden = true;
+  }
 }
 
 function getIntroSubtitle() {
@@ -2832,19 +4285,25 @@ function getMultipleChoiceFeedbackDetails(question, selectedLetter, isCorrect) {
   };
 }
 
-function renderAnswerExplanation(question, selectedLetter, isCorrect) {
+function renderAnswerExplanation(question, selectedValue, isCorrect, dissertativeEvaluation = null) {
   if (!explanationBox) return;
 
   if (isDissertativeQuestion(question)) {
-    const explanation = getExplanationForQuestion(question);
-    explanationBox.innerHTML = `🧠 Explicação:<br />${escapeHtml(explanation.explanation)}<br /><br />📌 Dica:<br />${escapeHtml(explanation.hint)}`;
+    const evaluation = dissertativeEvaluation || buildDissertativeEvaluation(question, selectedValue);
+    explanationBox.innerHTML = `
+      🧠 Análise da resposta<br />${escapeHtml(evaluation.analysis)}
+      <br /><br />✅ Pontos positivos<br />- ${evaluation.positives.map((item) => escapeHtml(item)).join("<br />- ")}
+      <br /><br />📚 O que poderia ser aprofundado<br />- ${evaluation.deepenings.map((item) => escapeHtml(item)).join("<br />- ")}
+      <br /><br />🎯 Explicação completa da questão<br />${escapeHtml(evaluation.didacticExplanation)}
+      <br /><br />✍ Exemplo de resposta completa<br />${escapeHtml(evaluation.sampleAnswer)}
+    `;
     explanationBox.hidden = false;
     return;
   }
 
-  const details = getMultipleChoiceFeedbackDetails(question, selectedLetter, isCorrect);
+  const details = getMultipleChoiceFeedbackDetails(question, selectedValue, isCorrect);
   explanationBox.innerHTML = isCorrect
-    ? `🧠 Explicação:<br />${escapeHtml(details.explanation)}<br /><br />📌 Dica:<br />${escapeHtml(details.hint)}`
+    ? `🧠 Explicação:<br />${escapeHtml(details.explanation)}`
     : `🧠 Explicação:<br />${escapeHtml(details.explanation)}<br /><br />📌 Por quê:<br />${escapeHtml(details.reason)}<br /><br />📌 Dica:<br />${escapeHtml(details.hint)}`;
   explanationBox.hidden = false;
 }
@@ -2929,7 +4388,7 @@ function hasActiveUnlockWindow() {
 }
 
 function shouldShowTestStatusView() {
-  return postLoginOnlyMode && hasActiveUnlockWindow() && !hasPendingUnlockAward() && isCycleActive();
+  return false;
 }
 
 function refreshStudentGradePreview() {
@@ -2940,8 +4399,9 @@ function renderImportButtonLabel() {
   if (!importCurrentGradeButton) return;
   const aiVersionModeEnabled = isAiVersionModeEnabled();
   const parentDashboardMode = getParentDashboardMode();
+  const isStudyGuidedMode = parentDashboardMode === "study-guided";
   const label = aiVersionModeEnabled
-    ? (parentDashboardMode === "study-guided" ? "Gerar Desbloqueio" : "Gerar Teste")
+    ? (isStudyGuidedMode ? "Gerar Desbloqueio" : "Gerar Teste")
     : "Importar Questões";
   importCurrentGradeButton.innerHTML = `<span class="import-button__label">${label}</span>`;
   renderAiDashboardConfig();
@@ -2954,8 +4414,8 @@ function renderImportButtonLabel() {
     questionBankPreviewPanel.setAttribute("aria-label", previewLabel);
   }
   if (questionBankPreviewButton) {
-    const isStudyGuidedMode = parentDashboardMode === "study-guided";
     questionBankPreviewButton.classList.toggle("import-preview-button--upload", isStudyGuidedMode);
+    questionBankPreviewButton.classList.toggle("import-preview-button--upload-icon-only", isStudyGuidedMode);
     questionBankPreviewButton.innerHTML = isStudyGuidedMode
       ? `
         <span class="import-preview-button__upload-icon" aria-hidden="true">
@@ -2965,7 +4425,6 @@ function renderImportButtonLabel() {
             <path d="M5 11.5V19h14v-7.5"></path>
           </svg>
         </span>
-        <span class="import-preview-button__upload-label">Fazer upload</span>
       `
       : `
         <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -2982,8 +4441,19 @@ function renderImportButtonLabel() {
         ? "Fazer upload de conteúdo"
         : aiVersionModeEnabled
           ? "Ver questões geradas"
-          : "Ver questões importadas",
+        : "Ver questões importadas",
     );
+    questionBankPreviewButton.hidden = !isStudyGuidedMode;
+  }
+  if (questionBankPreviewShell) {
+    questionBankPreviewShell.hidden = !isStudyGuidedMode;
+    questionBankPreviewShell.classList.remove("is-open");
+  }
+  if (questionBankPreviewPanel) {
+    questionBankPreviewPanel.hidden = true;
+  }
+  if (studyGuidedCameraButton) {
+    studyGuidedCameraButton.hidden = !isStudyGuidedMode;
   }
   if (questionBankPreviewContent) {
     const generatedEmptyState = "Nenhuma questão gerada ainda.";
@@ -2995,6 +4465,10 @@ function renderImportButtonLabel() {
       questionBankPreviewContent.textContent = aiVersionModeEnabled ? generatedEmptyState : importedEmptyState;
     }
   }
+}
+
+function canUseNativeStudyGuidedCamera() {
+  return typeof window.SmartUnlockNative?.openStudyGuidedCamera === "function";
 }
 
 function isAiVersionModeEnabled() {
@@ -4911,6 +6385,42 @@ function buildSimulatedAiGenerationResponse(payload) {
   };
 }
 
+function sanitizeChoiceQuestionText(rawText, rawOptions = []) {
+  const originalText = String(rawText || "").trim();
+  if (!originalText) return "";
+
+  let sanitizedText = originalText
+    .replace(/\s+/g, " ")
+    .replace(/\s([A-D])\)\s+/g, "\n$1) ")
+    .replace(/\s([A-D])\.\s+/g, "\n$1. ")
+    .trim();
+
+  const splitByAlternatives = sanitizedText.split(/\n(?=[A-D][\)\.]\s)/);
+  if (splitByAlternatives.length > 1) {
+    sanitizedText = splitByAlternatives[0].trim();
+  }
+
+  const fallbackSplit = sanitizedText.match(/^(.*?)(?=\s[A-D][\)\.]\s)/);
+  if (fallbackSplit?.[1]) {
+    sanitizedText = fallbackSplit[1].trim();
+  }
+
+  const normalizedOptions = Array.isArray(rawOptions)
+    ? rawOptions.map((option) => String(option || "").trim()).filter(Boolean)
+    : [];
+
+  normalizedOptions.forEach((option) => {
+    if (!option) return;
+    const escapedOption = option.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    sanitizedText = sanitizedText
+      .replace(new RegExp(`\\s*[A-D][\\)\\.]\\s*${escapedOption}`, "gi"), "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  });
+
+  return sanitizedText.replace(/\s+/g, " ").trim();
+}
+
 function parseAiGenerationResponse(rawResponse, payload) {
   const request = payload?.request;
   if (!request) {
@@ -5014,6 +6524,7 @@ function parseAiGenerationResponse(rawResponse, payload) {
         throw new Error(`A questão ${index + 1} precisa informar a alternativa correta entre A e D.`);
       }
 
+      parsedQuestion.text = sanitizeChoiceQuestionText(text, options) || text;
       parsedQuestion.options = options;
       parsedQuestion.correct = correct;
       parsedQuestion.expectedAnswer = "";
@@ -5142,6 +6653,36 @@ function calculateScore() {
   return Math.round((correctCount / roundQuestions.length) * 10);
 }
 
+async function restartRoundFromSummary() {
+  retryPending = false;
+  answered = false;
+  dissertativeRecoveryMode = false;
+  selectedAnswer = "";
+  selectedTextAnswer = "";
+  if (testSummaryExitButton) {
+    testSummaryExitButton.hidden = true;
+  }
+
+  if (postLoginOnlyMode) {
+    manualUnlockButton?.setAttribute("aria-pressed", "true");
+    setCycleActive(true);
+    setTestModeEnabled(true);
+    prototypeCycleStatusMessage = "";
+    renderQuestionBankStatus();
+    setActiveView("parent");
+    await startRound();
+    return;
+  }
+
+  manualUnlockButton?.setAttribute("aria-pressed", "true");
+  setTestModeEnabled(true);
+  setActiveView("child");
+  await startRound();
+  if (window.AndroidBridge?.startTestLock) {
+    window.AndroidBridge.startTestLock();
+  }
+}
+
 async function submitAnswer() {
   if (introMode) {
     renderQuestion();
@@ -5149,11 +6690,7 @@ async function submitAnswer() {
   }
 
   if (retryPending) {
-    if (isTestModeEnabled()) {
-      startOverlayRound();
-    } else {
-      startRound();
-    }
+    await restartRoundFromSummary();
     return;
   }
 
@@ -5161,8 +6698,11 @@ async function submitAnswer() {
 
   if (!answered) {
     const isRecoveryAttempt = isDissertativeQuestion(question) && dissertativeRecoveryMode;
+    const dissertativeEvaluation = isDissertativeQuestion(question)
+      ? buildDissertativeEvaluation(question, selectedTextAnswer)
+      : null;
     const isCorrect = isDissertativeQuestion(question)
-      ? validateDissertativeAnswer(question, selectedTextAnswer)
+      ? dissertativeEvaluation.mastered
       : selectedAnswer === question.correct;
     if (!isRecoveryAttempt && !firstAttemptResults[currentIndex]) {
       firstAttemptResults[currentIndex] = {
@@ -5178,12 +6718,19 @@ async function submitAnswer() {
     }
 
     scoreLabel.textContent = String(correctCount);
-    feedback.innerHTML = isCorrect
-      ? "✅ Muito bem! Você acertou 👏 ⭐ +1 estrelinha"
-      : "❌ Quase!<br />Vamos aprender juntos 😊";
-    feedback.className = `feedback ${isCorrect ? "success" : "warning"}`;
-    supportText.textContent = correctCount ? `⭐ ${correctCount} estrelinha${correctCount > 1 ? "s" : ""} • Você está indo muito bem!` : "Você consegue! Vamos juntos.";
-    renderAnswerExplanation(question, selectedAnswer, isCorrect);
+    if (isDissertativeQuestion(question)) {
+      feedback.innerHTML = dissertativeEvaluation.feedbackTitle;
+      feedback.className = `feedback ${isCorrect ? "success" : "warning"}`;
+      supportText.textContent = dissertativeEvaluation.supportText;
+      renderAnswerExplanation(question, selectedTextAnswer, isCorrect, dissertativeEvaluation);
+    } else {
+      feedback.innerHTML = isCorrect
+        ? "✅ Muito bem! Você acertou 👏 ⭐ +1 estrelinha"
+        : "❌ Quase!<br />Vamos aprender juntos 😊";
+      feedback.className = `feedback ${isCorrect ? "success" : "warning"}`;
+      supportText.textContent = correctCount ? `⭐ ${correctCount} estrelinha${correctCount > 1 ? "s" : ""} • Você está indo muito bem!` : "Você consegue! Vamos juntos.";
+      renderAnswerExplanation(question, selectedAnswer, isCorrect);
+    }
 
     if (isCorrect && isRecoveryAttempt) {
       dissertativeRecoveryMode = false;
@@ -5199,20 +6746,12 @@ async function submitAnswer() {
     }
 
     if (!isCorrect) {
-      if (isDissertativeQuestion(question)) {
-        dissertativeRecoveryMode = true;
-        setExplanationCopyUnlocked(true);
-        setDissertativeInputClipboardUnlocked(true);
-        nextButton.textContent = "Continuar";
-        nextButton.disabled = !selectedTextAnswer.trim();
-        return;
-      }
+      dissertativeRecoveryMode = false;
       hardenExplanationBox();
       setExplanationCopyUnlocked(false);
-      await saveResult(calculateScore(), false);
-      renderParentDashboard();
-      retryPending = true;
-      nextButton.textContent = "Continuar";
+      setDissertativeInputClipboardUnlocked(false);
+      answered = true;
+      nextButton.textContent = currentIndex === roundQuestions.length - 1 ? "Ver resultado" : "Continuar";
       nextButton.disabled = false;
       return;
     }
@@ -5237,16 +6776,36 @@ async function finishRound() {
   const passed = correctCount === roundQuestions.length;
   await saveResult(score, passed);
   renderParentDashboard();
-
-  if (passed) {
-    beginUnlockPeriod();
-    return;
-  }
-
-  feedback.innerHTML = "❌ Quase!<br />Vamos aprender juntos 😊";
-  feedback.className = "feedback warning";
-  nextButton.textContent = "Tentar nova rodada";
+  introMode = false;
+  answered = true;
   retryPending = true;
+  retryQuestionMode = false;
+  dissertativeRecoveryMode = false;
+  selectedAnswer = "";
+  selectedTextAnswer = "";
+  answerList.innerHTML = "";
+  questionCounter.textContent = `Resultado: ${correctCount}/${roundQuestions.length}`;
+  gateTitle.textContent = "Rodada concluída";
+  gateSubtitle.textContent = "Veja seu resultado e escolha se quer tentar de novo ou sair.";
+  questionText.textContent = "";
+  questionText.hidden = true;
+  supportText.textContent = "";
+  feedback.innerHTML = "";
+  feedback.className = "feedback";
+  feedback.hidden = true;
+  explanationBox.hidden = false;
+  explanationBox.innerHTML = `
+    <strong>Resultado final</strong><br />
+    Acertos: ${correctCount} de ${roundQuestions.length}<br />
+    Erros: ${Math.max(0, roundQuestions.length - correctCount)}<br />
+    Nota: ${score}/10
+  `;
+  actionRow.hidden = true;
+  nextButton.classList.remove("test-summary-retry-button");
+  if (testSummaryExitButton) {
+    testSummaryExitButton.hidden = false;
+  }
+  educationGate.scrollTop = 0;
 }
 
 function beginUnlockPeriod() {
@@ -5610,14 +7169,35 @@ function renderStudyGuidedUploadPreview() {
 function setStudyGuidedUploadPreview(dataUrls) {
   studyGuidedUploadPreviewDataUrls = Array.isArray(dataUrls) ? dataUrls.filter(Boolean).slice(0, 3) : [];
 
-  if (studyGuidedUploadPreviewDataUrls.length) {
-    localStorage.setItem(studyGuidedUploadPreviewStorageKey, JSON.stringify(studyGuidedUploadPreviewDataUrls));
-  } else {
-    localStorage.removeItem(studyGuidedUploadPreviewStorageKey);
+  try {
+    if (studyGuidedUploadPreviewDataUrls.length) {
+      localStorage.setItem(studyGuidedUploadPreviewStorageKey, JSON.stringify(studyGuidedUploadPreviewDataUrls));
+    } else {
+      localStorage.removeItem(studyGuidedUploadPreviewStorageKey);
+    }
+  } catch (error) {
+    console.warn("[Study guided] Nao foi possivel persistir a miniatura da imagem:", error);
   }
 
   renderStudyGuidedUploadPreview();
   setStudyGuidedExplanation(null);
+}
+
+function appendStudyGuidedCapturedImage(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string") return;
+
+  const remainingSlots = Math.max(0, 3 - studyGuidedUploadPreviewDataUrls.length);
+  if (!remainingSlots) {
+    openSetupWarningModal("Voce pode carregar no maximo 3 imagens por rodada de estudo.");
+    return;
+  }
+
+  setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, dataUrl].slice(0, 3));
+  prototypeImportStatusMessage = "";
+  if (questionBankStatus) {
+    questionBankStatus.hidden = true;
+    questionBankStatus.textContent = "";
+  }
 }
 
 function readFileAsDataUrl(file) {
@@ -5695,6 +7275,18 @@ function removeStudyGuidedUploadPreviewImage(indexToRemove) {
   setStudyGuidedUploadPreview(nextImages);
 }
 
+window.__smartUnlockReceiveStudyGuidedCameraImage = function (dataUrl) {
+  appendStudyGuidedCapturedImage(dataUrl);
+};
+
+window.__smartUnlockReceiveStudyGuidedCameraError = function (message) {
+  openSetupWarningModal(
+    typeof message === "string" && message.trim()
+      ? message
+      : "Nao foi possivel tirar a foto do conteudo agora.",
+  );
+};
+
 function normalizeStudyGuidedStep(step) {
   return String(step || "")
     .trim()
@@ -5712,11 +7304,65 @@ function formatStudyGuidedParagraphs(text) {
     .join("");
 }
 
+function formatStudyGuidedFollowupAnswerHtml(text) {
+  const lines = String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return "";
+
+  const parts = [];
+  let pendingListItems = [];
+
+  const flushList = () => {
+    if (!pendingListItems.length) return;
+    parts.push(`
+      <ul class="study-guided-followup-answer-list">
+        ${pendingListItems.map((item) => `<li>${item}</li>`).join("")}
+      </ul>
+    `);
+    pendingListItems = [];
+  };
+
+  const formatInline = (value) => escapeHtml(String(value || ""))
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+  lines.forEach((line) => {
+    const bulletMatch = line.match(/^(?:[-*]\s+|\d+\)\s*|\d+\.\s*)(.+)$/);
+    if (bulletMatch) {
+      pendingListItems.push(formatInline(bulletMatch[1]));
+      return;
+    }
+
+    flushList();
+    parts.push(`<p>${formatInline(line)}</p>`);
+  });
+
+  flushList();
+  return parts.join("");
+}
+
 function canUseStudyGuidedAudioPlayback() {
   return typeof window !== "undefined" && typeof window.Audio !== "undefined" && typeof window.URL?.createObjectURL === "function";
 }
 
+function clearStudyGuidedAudioPreloadedSources() {
+  studyGuidedAudioPreloadedSources.forEach((source) => {
+    if (Array.isArray(source?.objectUrls)) {
+      source.objectUrls.forEach((objectUrl) => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      });
+      return;
+    }
+    if (source?.objectUrl) URL.revokeObjectURL(source.objectUrl);
+  });
+  studyGuidedAudioPreloadedSources = new Map();
+}
+
 function stopStudyGuidedAudioPlayback() {
+  closeStudyGuidedAudioWaitModal();
+
   if (studyGuidedAudioPlayer) {
     studyGuidedAudioPlayer.pause();
     studyGuidedAudioPlayer.src = "";
@@ -5728,63 +7374,128 @@ function stopStudyGuidedAudioPlayback() {
     studyGuidedAudioObjectUrl = "";
   }
 
+  studyGuidedAudioActiveSection = "";
+  studyGuidedAudioPaused = false;
   studyGuidedAudioLoadingSection = "";
+  studyGuidedAudioPlaylistIndex = 0;
   setStudyGuidedAudioButtonState();
 }
 
 function resetStudyGuidedAudioUsage() {
   stopStudyGuidedAudioPlayback();
-  studyGuidedAudioPlayedSections = new Set();
 }
 
 function setStudyGuidedAudioButtonState() {
   if (!studyGuidedExplanationBody) return;
 
-  studyGuidedExplanationBody.querySelectorAll(".study-guided-audio-button").forEach((button) => {
-    const section = String(button.dataset.speechSection || "");
+  studyGuidedExplanationBody.querySelectorAll(".study-guided-audio-shell").forEach((shell) => {
+    const section = String(shell.getAttribute("data-speech-shell") || "");
+    const button = shell.querySelector(".study-guided-audio-button");
+    const controls = shell.querySelector(".study-guided-audio-controls");
+    const pauseButton = shell.querySelector('[data-audio-control="pause"]');
+    const playButton = shell.querySelector('[data-audio-control="play"]');
+    if (!button) return;
+
     const isLoading = section && section === studyGuidedAudioLoadingSection;
-    const wasPlayed = section && studyGuidedAudioPlayedSections.has(section);
+    const isActive = section && section === studyGuidedAudioActiveSection && Boolean(studyGuidedAudioPlayer);
     const label = button.querySelector(".study-guided-audio-button__label");
 
-    button.disabled = Boolean(isLoading || wasPlayed);
+    button.hidden = Boolean(isActive);
+    button.disabled = Boolean(isLoading);
     button.classList.toggle("is-loading", isLoading);
-    button.classList.toggle("is-played", wasPlayed);
-    button.setAttribute("aria-pressed", isLoading || wasPlayed ? "true" : "false");
+    button.classList.remove("is-played");
+    button.setAttribute("aria-pressed", isLoading ? "true" : "false");
+
+    if (controls) {
+      controls.hidden = !isActive;
+    }
+
+    if (pauseButton) {
+      pauseButton.disabled = !isActive || studyGuidedAudioPaused;
+      pauseButton.classList.toggle("is-active", isActive && !studyGuidedAudioPaused);
+    }
+
+    if (playButton) {
+      playButton.disabled = !isActive || !studyGuidedAudioPaused;
+      playButton.classList.toggle("is-active", isActive && studyGuidedAudioPaused);
+    }
 
     if (label) {
-      label.textContent = isLoading ? "Gerando..." : "Ouvir";
+      label.textContent = isLoading ? "Aguarde..." : "Ouvir";
     }
   });
+}
+
+function pauseStudyGuidedAudioPlayback() {
+  if (!studyGuidedAudioPlayer || !studyGuidedAudioActiveSection || studyGuidedAudioPaused) return;
+  studyGuidedAudioPlayer.pause();
+  studyGuidedAudioPaused = true;
+  setStudyGuidedAudioButtonState();
+}
+
+async function resumeStudyGuidedAudioPlayback() {
+  if (!studyGuidedAudioPlayer || !studyGuidedAudioActiveSection || !studyGuidedAudioPaused) return;
+
+  try {
+    await studyGuidedAudioPlayer.play();
+    studyGuidedAudioPaused = false;
+    setStudyGuidedAudioButtonState();
+  } catch (error) {
+    window.alert(getErrorMessage(error, "Não foi possível retomar o áudio agora."));
+  }
+}
+
+function seekStudyGuidedAudioPlayback(offsetSeconds) {
+  if (!studyGuidedAudioPlayer || !studyGuidedAudioActiveSection || !Number.isFinite(offsetSeconds)) return;
+
+  const duration = Number.isFinite(studyGuidedAudioPlayer.duration)
+    ? studyGuidedAudioPlayer.duration
+    : Number.POSITIVE_INFINITY;
+  const nextTime = Math.min(
+    Math.max(0, (Number(studyGuidedAudioPlayer.currentTime) || 0) + offsetSeconds),
+    duration,
+  );
+  studyGuidedAudioPlayer.currentTime = nextTime;
 }
 
 function buildStudyGuidedAudioText(section) {
   if (!studyGuidedExplanationState?.explanation) return "";
 
-  const clampAudioText = (rawText, maxLength = 420) =>
-    String(rawText || "")
+  const cleanStepForAudio = (rawStep) =>
+    String(rawStep || "")
+      .replace(/^\s*\d+[\).\-\s:]+/, "")
       .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, maxLength);
+      .trim();
 
   if (section === "intro") {
-    return clampAudioText(studyGuidedExplanationState.explanation.intro || "", 300);
+    return normalizeStudyGuidedAudioText(studyGuidedExplanationState.explanation.intro || "");
   }
 
   if (section === "steps") {
     const steps = Array.isArray(studyGuidedExplanationState.explanation.steps)
-      ? studyGuidedExplanationState.explanation.steps.map(normalizeStudyGuidedStep).filter(Boolean)
+      ? studyGuidedExplanationState.explanation.steps
+        .map(normalizeStudyGuidedStep)
+        .map(cleanStepForAudio)
+        .filter(Boolean)
       : [];
-    return clampAudioText(
-      steps
-        .slice(0, 2)
-        .map((step, index) => `Passo ${index + 1}. ${step}`)
-        .join(" "),
-      380,
-    );
+    return limitStudyGuidedAudioText(steps.join(" "), studyGuidedStepsAudioMaxLength);
   }
 
   if (section === "example") {
-    return clampAudioText(studyGuidedExplanationState.explanation.visualExample || "", 300);
+    return normalizeStudyGuidedAudioText(studyGuidedExplanationState.explanation.visualExample || "");
+  }
+
+  if (section === "full") {
+    const intro = normalizeStudyGuidedAudioText(studyGuidedExplanationState.explanation.intro || "");
+    const steps = Array.isArray(studyGuidedExplanationState.explanation.steps)
+      ? studyGuidedExplanationState.explanation.steps
+        .map(normalizeStudyGuidedStep)
+        .map(cleanStepForAudio)
+        .filter(Boolean)
+        .join(" ")
+      : "";
+    const example = normalizeStudyGuidedAudioText(studyGuidedExplanationState.explanation.visualExample || "");
+    return normalizeStudyGuidedAudioText([intro, steps, example].filter(Boolean).join(" "));
   }
 
   return "";
@@ -5808,43 +7519,175 @@ function buildStudyGuidedAudioStreamUrl(section) {
   return audioUrl.toString();
 }
 
-async function playStudyGuidedSectionAudio(section) {
-  if (!canUseStudyGuidedAudioPlayback()) return;
-  if (!section || studyGuidedAudioPlayedSections.has(section) || studyGuidedAudioLoadingSection) return;
+async function requestStudyGuidedAudioBlob(text) {
+  const normalizedText = normalizeStudyGuidedAudioText(text);
+  if (!normalizedText) {
+    throw new Error("Não há conteúdo disponível para gerar o áudio.");
+  }
 
-  markActiveRuntimeSession();
+  const config = getAiApiConfig();
+  if (config.providerMode !== "api") {
+    throw new Error("O áudio real só fica disponível quando a API estiver ativa.");
+  }
+
+  const response = await fetch(getAiGenerateStudyAudioUrl(config), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text: normalizedText }),
+  });
+
+  if (!response.ok) {
+    let apiMessage = "";
+    try {
+      const errorPayload = await response.json();
+      apiMessage = String(errorPayload?.message || errorPayload?.error || "").trim();
+    } catch (_) {
+      apiMessage = "";
+    }
+    throw new Error(apiMessage || `A API respondeu com status ${response.status}.`);
+  }
+
+  const audioBlob = await response.blob();
+  if (!audioBlob.size) {
+    throw new Error("A API não devolveu áudio para esse conteúdo.");
+  }
+
+  return audioBlob;
+}
+
+async function preloadStudyGuidedSectionAudio(section) {
+  if (!canUseStudyGuidedAudioPlayback() || !section) return false;
+
+  const text = buildStudyGuidedAudioText(section);
+  if (!text) return false;
+  const chunks = splitStudyGuidedAudioTextIntoChunks(text);
+  if (!chunks.length) return false;
+
+  const cachedSource = studyGuidedAudioPreloadedSources.get(section);
+  if (cachedSource?.text === text && Array.isArray(cachedSource?.objectUrls) && cachedSource.objectUrls.length) {
+    return true;
+  }
+
+  if (Array.isArray(cachedSource?.objectUrls)) {
+    cachedSource.objectUrls.forEach((objectUrl) => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    });
+    studyGuidedAudioPreloadedSources.delete(section);
+  } else if (cachedSource?.objectUrl) {
+    URL.revokeObjectURL(cachedSource.objectUrl);
+    studyGuidedAudioPreloadedSources.delete(section);
+  }
+
   studyGuidedAudioLoadingSection = section;
   setStudyGuidedAudioButtonState();
 
   try {
-    const audioStreamUrl = buildStudyGuidedAudioStreamUrl(section);
-    stopStudyGuidedAudioPlayback();
+    const audioBlobs = await Promise.all(chunks.map((chunk) => requestStudyGuidedAudioBlob(chunk)));
+    const objectUrls = audioBlobs.map((audioBlob) => URL.createObjectURL(audioBlob));
+    studyGuidedAudioPreloadedSources.set(section, {
+      text,
+      chunks,
+      objectUrls,
+    });
+    return true;
+  } finally {
+    if (studyGuidedAudioLoadingSection === section) {
+      studyGuidedAudioLoadingSection = "";
+      setStudyGuidedAudioButtonState();
+    }
+  }
+}
+
+async function playStudyGuidedSectionAudio(section) {
+  if (!canUseStudyGuidedAudioPlayback()) return;
+  if (!section || studyGuidedAudioLoadingSection) return;
+
+  markActiveRuntimeSession();
+  stopStudyGuidedAudioPlayback();
+
+  try {
+    let audioSourceUrls = [];
+    const cachedSource = studyGuidedAudioPreloadedSources.get(section);
+    const text = buildStudyGuidedAudioText(section);
+
+    if (Array.isArray(cachedSource?.objectUrls) && cachedSource?.text === text && cachedSource.objectUrls.length) {
+      audioSourceUrls = cachedSource.objectUrls.slice();
+    } else {
+      const loadingStartedAt = Date.now();
+      studyGuidedAudioLoadingSection = section;
+      setStudyGuidedAudioButtonState();
+      openStudyGuidedAudioWaitModal("O áudio já vai começar");
+
+      const chunks = splitStudyGuidedAudioTextIntoChunks(text);
+      const audioBlobs = await Promise.all(chunks.map((chunk) => requestStudyGuidedAudioBlob(chunk)));
+      const objectUrls = audioBlobs.map((audioBlob) => URL.createObjectURL(audioBlob));
+      studyGuidedAudioPreloadedSources.set(section, {
+        text,
+        chunks,
+        objectUrls,
+      });
+      audioSourceUrls = objectUrls;
+
+      const remaining = 1200 - (Date.now() - loadingStartedAt);
+      if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
+    }
 
     const audio = new Audio();
     audio.preload = "metadata";
     audio.playsInline = true;
-    audio.src = audioStreamUrl;
+    studyGuidedAudioPlaylistIndex = 0;
+    audio.src = audioSourceUrls[0] || "";
 
     studyGuidedAudioPlayer = audio;
+    studyGuidedAudioActiveSection = section;
+    studyGuidedAudioPaused = false;
 
-    audio.onended = () => {
+    const readyPromise = new Promise((resolve, reject) => {
+      audio.addEventListener("canplay", () => resolve(), { once: true });
+      audio.addEventListener("error", () => reject(new Error("Não foi possível carregar o áudio agora.")), { once: true });
+    });
+
+    const playingPromise = new Promise((resolve, reject) => {
+      audio.addEventListener("playing", () => resolve(), { once: true });
+      audio.addEventListener("error", () => reject(new Error("Não foi possível carregar o áudio agora.")), { once: true });
+    });
+
+    audio.onended = async () => {
+      const nextIndex = studyGuidedAudioPlaylistIndex + 1;
+      if (nextIndex < audioSourceUrls.length) {
+        studyGuidedAudioPlaylistIndex = nextIndex;
+        audio.src = audioSourceUrls[nextIndex];
+        audio.load();
+        try {
+          await audio.play();
+        } catch (_) {
+          stopStudyGuidedAudioPlayback();
+        }
+        return;
+      }
       stopStudyGuidedAudioPlayback();
     };
     audio.onerror = () => {
       stopStudyGuidedAudioPlayback();
     };
-
-    audio.oncanplay = () => {
-      if (studyGuidedAudioLoadingSection === section) {
-        studyGuidedAudioLoadingSection = "";
-        setStudyGuidedAudioButtonState();
-      }
+    audio.onpause = () => {
+      if (audio.ended) return;
+      studyGuidedAudioPaused = true;
+      setStudyGuidedAudioButtonState();
+    };
+    audio.onplay = () => {
+      studyGuidedAudioPaused = false;
+      setStudyGuidedAudioButtonState();
     };
 
     audio.load();
-    await audio.play();
+    await Promise.all([readyPromise, audio.play(), playingPromise]);
+    closeStudyGuidedAudioWaitModal();
     studyGuidedAudioLoadingSection = "";
-    studyGuidedAudioPlayedSections = new Set([...studyGuidedAudioPlayedSections, section]);
     setStudyGuidedAudioButtonState();
   } catch (error) {
     const message = error instanceof Error && error.name === "AbortError"
@@ -5852,6 +7695,503 @@ async function playStudyGuidedSectionAudio(section) {
       : getErrorMessage(error, "Não foi possível reproduzir o áudio agora.");
     window.alert(message);
     stopStudyGuidedAudioPlayback();
+  }
+}
+
+const studyGuidedTestCountOptions = [
+  { value: 5, label: "5 questões" },
+  { value: 10, label: "10 questões" },
+];
+
+function getStudyGuidedTestCountLabel() {
+  const draft = getStudyGuidedTestDraft();
+  const selectedOption = studyGuidedTestCountOptions.find((option) => option.value === Number(draft.count || 5));
+  return selectedOption?.label || "5 questões";
+}
+
+function shouldShowStudyGuidedTestFlow() {
+  return Boolean(studyGuidedExplanationState?.explanation);
+}
+
+function getStudyGuidedTestPreviewSummary() {
+  const selectionState = getStudyGuidedSelectionState();
+  const grade = selectionState.grade || getStudyGuidedTestMeta()?.grade || getSelectedGrade();
+  const questions = grade ? getStudyGuidedTestQuestionsForGrade(grade) : [];
+  const meta = getStudyGuidedTestMeta();
+
+  if (questions.length) {
+    const errorLine = meta?.source === "simulated" && meta.errorMessage
+      ? `Falha da API: ${meta.errorMessage}`
+      : "";
+    const questionLines = questions.map((question, index) => {
+      const subjectLabel = getSubjectDisplayLabel(question.subject);
+      const typeLabel = isDissertativeQuestion(question) ? "Dissertativa" : "Múltipla escolha";
+      return `${index + 1}. ${normalizeGradeLabel(question.grade)} ano • ${subjectLabel} • ${typeLabel}\n${truncateAiPreviewText(question.text)}`;
+    });
+    return [errorLine, ...questionLines].filter(Boolean).join("\n\n");
+  }
+
+  return "Nenhuma questão gerada ainda.";
+}
+
+function getStudyGuidedEligibleGeneratedQuestions() {
+  const selectionState = getStudyGuidedSelectionState();
+  if (!selectionState.ok) {
+    return {
+      ok: false,
+      detail: selectionState.message,
+      grade: "",
+      questions: [],
+    };
+  }
+
+  const generatedQuestions = getStudyGuidedTestQuestionsForGrade(selectionState.grade);
+  if (!generatedQuestions.length) {
+    return {
+      ok: false,
+      detail: "Gere o teste do Desbloqueio antes de clicar em Aplicar Teste.",
+      grade: selectionState.grade,
+      questions: [],
+    };
+  }
+
+  const selectedSubject = normalizeSubjectName(selectionState.subjects[0]);
+  const eligibleQuestions = generatedQuestions.filter((question) =>
+    normalizeSubjectName(question.subject) === selectedSubject,
+  );
+
+  if (!eligibleQuestions.length) {
+    return {
+      ok: false,
+      detail: "As questões geradas não correspondem à matéria selecionada neste Desbloqueio.",
+      grade: selectionState.grade,
+      questions: [],
+    };
+  }
+
+  return {
+    ok: true,
+    detail: "",
+    grade: selectionState.grade,
+    questions: eligibleQuestions,
+  };
+}
+
+function buildStudyGuidedTestBlockHtml() {
+  const draft = getStudyGuidedTestDraft();
+  const previewText = getStudyGuidedTestPreviewSummary();
+  const hasQuestions = getStudyGuidedEligibleGeneratedQuestions().questions.length > 0;
+  const isDisabled = studyGuidedTestGenerating || studyGuidedTestApplying;
+
+  return `
+    <div class="study-guided-test-intro">
+      <div class="study-guided-test-intro__icon" aria-hidden="true">
+        <img src="assets/study-guided-test-icon.png" alt="" loading="lazy" decoding="async">
+      </div>
+      <h4 class="study-guided-test-intro__title">Vamos aplicar um Teste de Conhecimento</h4>
+      <p class="study-guided-test-intro__text">Escolha a quantidade de questões e o tipo de teste e clique em Gerar Teste e depois em Aplicar Teste.</p>
+    </div>
+
+    <div class="study-guided-test-config">
+      <div class="ai-generation-count-shell study-guided-test-count-shell" data-study-guided-test-count-shell>
+        <button
+          type="button"
+          class="ai-generation-count-trigger study-guided-test-count-trigger"
+          data-study-guided-test-count-trigger
+          aria-haspopup="listbox"
+          aria-expanded="false"
+        >
+          ${escapeHtml(getStudyGuidedTestCountLabel())}
+        </button>
+        <div class="ai-generation-count-menu study-guided-test-count-menu" data-study-guided-test-count-menu hidden>
+          ${studyGuidedTestCountOptions.map((option) => `
+            <button
+              type="button"
+              class="ai-generation-count-option"
+              data-study-guided-test-count-option="${option.value}"
+            >
+              ${escapeHtml(option.label)}
+            </button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="study-guided-test-choice-row">
+        <div class="study-guided-test-types" aria-label="Tipo de questão do Desbloqueio">
+          <label class="ai-generation-checkbox" for="studyGuidedTestTypeChoice">
+            <input
+              id="studyGuidedTestTypeChoice"
+              type="checkbox"
+              data-study-guided-test-type="choice"
+              ${draft.questionTypes?.choice ? "checked" : ""}
+            />
+            <span>Múltipla escolha</span>
+          </label>
+          <label class="ai-generation-checkbox" for="studyGuidedTestTypeText">
+            <input
+              id="studyGuidedTestTypeText"
+              type="checkbox"
+              data-study-guided-test-type="text"
+              ${draft.questionTypes?.text ? "checked" : ""}
+            />
+            <span>Dissertativas</span>
+          </label>
+        </div>
+
+        <div class="study-guided-test-actions import-buttons-container">
+          <button
+            type="button"
+            class="file-button import-button study-guided-test-generate-button${studyGuidedTestGenerating ? " is-updating" : ""}"
+            data-study-guided-test-generate
+            ${isDisabled ? "disabled" : ""}
+          >
+            <span class="import-button__label">${studyGuidedTestGenerating ? "Gerando..." : "Gerar Teste"}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    ${hasQuestions ? `
+      <div class="study-guided-test-apply">
+        <button
+          type="button"
+          class="apply-test-primary-button"
+          data-study-guided-test-apply
+          ${isDisabled ? "disabled" : ""}
+        >
+          ${studyGuidedTestApplying ? "Aplicando..." : "Aplicar Teste"}
+        </button>
+      </div>
+    ` : ""}
+  `;
+}
+
+function refreshStudyGuidedTestUi() {
+  if (!studyGuidedExplanationBody) return;
+
+  const testGroup = studyGuidedExplanationBody.querySelector("[data-study-guided-test-group]");
+  if (!(testGroup instanceof HTMLElement)) return;
+
+  const shouldShow = shouldShowStudyGuidedTestFlow();
+  testGroup.hidden = !shouldShow;
+  if (!shouldShow) {
+    testGroup.innerHTML = "";
+    return;
+  }
+
+  syncStudyGuidedTestState();
+  testGroup.innerHTML = buildStudyGuidedTestBlockHtml();
+}
+
+function ensureStudyGuidedFollowupComposer() {
+  if (document.querySelector(".study-guided-followup-composer")) {
+    return document.querySelector(".study-guided-followup-composer");
+  }
+
+  const composer = document.createElement("div");
+  composer.className = "study-guided-followup-composer";
+  composer.hidden = true;
+  composer.innerHTML = `
+    <div class="study-guided-followup-composer__inner">
+      <textarea
+        class="study-guided-followup-composer__input"
+        placeholder="Pergunte mais sobre este conteúdo..."
+        rows="1"
+      ></textarea>
+      <button
+        type="button"
+        class="study-guided-followup-composer__send"
+        aria-label="Enviar pergunta complementar"
+        title="Enviar pergunta complementar"
+      >
+        <img
+          class="study-guided-followup-composer__send-logo"
+          src="assets/login-logo-symbol-light.png"
+          alt=""
+        />
+      </button>
+    </div>
+  `;
+
+  const input = composer.querySelector(".study-guided-followup-composer__input");
+  const sendButton = composer.querySelector(".study-guided-followup-composer__send");
+
+  input?.addEventListener("input", () => {
+    const textarea = input;
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  });
+
+  input?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    void handleStudyGuidedFollowupSubmit();
+  });
+
+  sendButton?.addEventListener("click", () => {
+    void handleStudyGuidedFollowupSubmit();
+  });
+
+  document.body.appendChild(composer);
+  return composer;
+}
+
+function getStudyGuidedFollowupHistoryHtml() {
+  const messages = getStudyGuidedConversationMessages();
+  if (!messages.length) return "";
+
+  return messages.map((message) => `
+    <article class="study-guided-followup-message study-guided-followup-message--${message.role}">
+      <div class="study-guided-followup-message__label">
+        ${message.role === "user" ? "Pergunta" : "Resposta complementar"}
+      </div>
+      <div class="study-guided-followup-message__bubble">
+        ${message.role === "assistant"
+          ? formatStudyGuidedFollowupAnswerHtml(message.text)
+          : formatStudyGuidedParagraphs(message.text)}
+      </div>
+    </article>
+  `).join("");
+}
+
+function updateStudyGuidedFollowupComposerVisibility() {
+  const composer = ensureStudyGuidedFollowupComposer();
+  if (!(composer instanceof HTMLElement)) return;
+
+  const shouldShow = Boolean(
+    studyGuidedExplanationState?.explanation
+    && !studyGuidedExplanationPanel?.hidden
+  );
+
+  composer.hidden = !shouldShow;
+  document.body.classList.toggle("study-guided-followup-active", shouldShow);
+
+  if (!shouldShow) {
+    composer.classList.remove("is-generating");
+  }
+}
+
+function refreshStudyGuidedFollowupUi() {
+  updateStudyGuidedFollowupComposerVisibility();
+  if (!studyGuidedExplanationBody) return;
+
+  const historyGroup = studyGuidedExplanationBody.querySelector("[data-study-guided-followup-group]");
+  const historyPanel = studyGuidedExplanationBody.querySelector("[data-study-guided-followup-history]");
+  const composer = ensureStudyGuidedFollowupComposer();
+  const input = composer?.querySelector(".study-guided-followup-composer__input");
+  const sendButton = composer?.querySelector(".study-guided-followup-composer__send");
+  const messages = getStudyGuidedConversationMessages();
+
+  if (historyGroup instanceof HTMLElement) {
+    historyGroup.hidden = messages.length === 0;
+  }
+  if (historyPanel instanceof HTMLElement) {
+    historyPanel.innerHTML = getStudyGuidedFollowupHistoryHtml();
+  }
+
+  if (composer instanceof HTMLElement) {
+    composer.classList.toggle("is-generating", studyGuidedFollowupGenerating);
+  }
+  if (input instanceof HTMLTextAreaElement) {
+    input.disabled = studyGuidedFollowupGenerating;
+    if (!studyGuidedFollowupGenerating) {
+      input.style.height = "auto";
+    }
+  }
+  if (sendButton instanceof HTMLButtonElement) {
+    sendButton.disabled = studyGuidedFollowupGenerating;
+    sendButton.setAttribute(
+      "aria-label",
+      studyGuidedFollowupGenerating ? "Enviando pergunta complementar" : "Enviar pergunta complementar"
+    );
+    sendButton.setAttribute(
+      "title",
+      studyGuidedFollowupGenerating ? "Enviando pergunta complementar" : "Enviar pergunta complementar"
+    );
+  }
+}
+
+function scrollStudyGuidedConversationToBottom() {
+  const historyPanel = studyGuidedExplanationBody?.querySelector("[data-study-guided-followup-history]");
+  if (historyPanel instanceof HTMLElement) {
+    historyPanel.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+  const composer = ensureStudyGuidedFollowupComposer();
+  if (composer instanceof HTMLElement) {
+    composer.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+}
+
+async function handleStudyGuidedFollowupSubmit() {
+  const composer = ensureStudyGuidedFollowupComposer();
+  const input = composer?.querySelector(".study-guided-followup-composer__input");
+  if (!(input instanceof HTMLTextAreaElement) || studyGuidedFollowupGenerating) return;
+
+  const question = String(input.value || "").trim();
+  if (!question) return;
+
+  const selectionState = getStudyGuidedSelectionState();
+  if (!selectionState.ok) {
+    openSetupWarningModal(selectionState.message);
+    return;
+  }
+
+  const payload = buildStudyGuidedFollowupPayload(question, selectionState);
+  if (!payload) {
+    openSetupWarningModal("Gere primeiro o conteúdo principal do estudo antes de fazer perguntas complementares.");
+    return;
+  }
+
+  studyGuidedFollowupGenerating = true;
+  appendStudyGuidedConversationMessage("user", question);
+  input.value = "";
+  refreshStudyGuidedFollowupUi();
+  scrollStudyGuidedConversationToBottom();
+
+  try {
+    const response = await requestAiStudyGuidedFollowup(payload);
+    const answerText = response?.compatible === false
+      ? studyGuidedFollowupInvalidMessage
+      : String(response?.message || "").trim() || "Não consegui complementar esse ponto agora.";
+    appendStudyGuidedConversationMessage("assistant", answerText);
+  } catch (error) {
+    appendStudyGuidedConversationMessage(
+      "assistant",
+      error instanceof Error && error.message
+        ? error.message
+        : "Não foi possível responder essa pergunta complementar agora.",
+    );
+  } finally {
+    studyGuidedFollowupGenerating = false;
+    refreshStudyGuidedFollowupUi();
+    scrollStudyGuidedConversationToBottom();
+  }
+}
+
+function closeStudyGuidedTestCountMenu() {
+  if (!studyGuidedExplanationBody) return;
+  const shell = studyGuidedExplanationBody.querySelector("[data-study-guided-test-count-shell]");
+  const trigger = studyGuidedExplanationBody.querySelector("[data-study-guided-test-count-trigger]");
+  const menu = studyGuidedExplanationBody.querySelector("[data-study-guided-test-count-menu]");
+
+  if (shell instanceof HTMLElement) {
+    shell.classList.remove("is-open");
+  }
+  if (trigger instanceof HTMLElement) {
+    trigger.setAttribute("aria-expanded", "false");
+  }
+  if (menu instanceof HTMLElement) {
+    menu.hidden = true;
+  }
+}
+
+function updateStudyGuidedTestDraft(partialDraft = {}, options = {}) {
+  const currentDraft = getStudyGuidedTestDraft();
+  saveStudyGuidedTestDraft({
+    ...currentDraft,
+    ...partialDraft,
+    signature: getStudyGuidedExplanationSignature(studyGuidedExplanationState),
+    questionTypes: {
+      choice: partialDraft.questionTypes?.choice ?? currentDraft.questionTypes.choice,
+      text: partialDraft.questionTypes?.text ?? currentDraft.questionTypes.text,
+    },
+  });
+
+  if (options.clearGeneratedState) {
+    clearStudyGuidedTestGeneratedState({ preservePreviewOpen: false });
+  }
+
+  refreshStudyGuidedTestUi();
+}
+
+async function handleStudyGuidedGenerateTest() {
+  if (studyGuidedTestGenerating) return;
+
+  const selectionState = getStudyGuidedSelectionState();
+  if (!selectionState.ok) {
+    openSetupWarningModal(selectionState.message);
+    return;
+  }
+
+  const draft = getStudyGuidedTestDraft();
+  if (!draft.questionTypes.choice && !draft.questionTypes.text) {
+    openSetupWarningModal("Selecione ao menos um tipo de questão para gerar o teste do Desbloqueio.");
+    return;
+  }
+
+  const knowledgeBase = buildStudyGuidedTestKnowledgeBase();
+  if (!knowledgeBase) {
+    openSetupWarningModal("Ainda não há explicação suficiente do Desbloqueio para gerar o teste.");
+    return;
+  }
+
+  const payload = buildStudyGuidedTestPayload(selectionState);
+  if (!payload) {
+    openSetupWarningModal("Não foi possível montar o teste do Desbloqueio agora.");
+    return;
+  }
+
+  studyGuidedTestGenerating = true;
+  refreshStudyGuidedTestUi();
+
+  try {
+    const parsedResponse = await requestAiGeneratedQuestions(payload);
+    replaceStudyGuidedTestQuestionsForGrade(selectionState.grade, parsedResponse.questions);
+    saveStudyGuidedTestMeta({
+      signature: getStudyGuidedExplanationSignature(studyGuidedExplanationState),
+      source: parsedResponse.source,
+      generatedAt: parsedResponse.metadata?.generatedAt,
+      count: parsedResponse.questions?.length || 0,
+      grade: selectionState.grade,
+      errorMessage: parsedResponse.errorMessage || "",
+    });
+    saveStudyGuidedTestDraft({
+      ...getStudyGuidedTestDraft(),
+      signature: getStudyGuidedExplanationSignature(studyGuidedExplanationState),
+      previewOpen: true,
+    });
+  } catch (error) {
+    openSetupWarningModal(error instanceof Error ? error.message : "Não foi possível gerar o teste do Desbloqueio agora.");
+  } finally {
+    studyGuidedTestGenerating = false;
+    refreshStudyGuidedTestUi();
+  }
+}
+
+function applyStudyGuidedGeneratedTestRound() {
+  if (studyGuidedTestApplying) return;
+
+  const eligible = getStudyGuidedEligibleGeneratedQuestions();
+  if (!eligible.ok) {
+    openSetupWarningModal(eligible.detail);
+    return;
+  }
+
+  const draft = getStudyGuidedTestDraft();
+  const desiredCount = Math.max(1, Number(draft.count || 5));
+  if (eligible.questions.length < desiredCount) {
+    openSetupWarningModal(`Gere ao menos ${desiredCount} questão(ões) no Desbloqueio antes de aplicar este teste.`);
+    return;
+  }
+
+  studyGuidedTestApplying = true;
+  refreshStudyGuidedTestUi();
+
+  try {
+    clearRetryRestartTimer();
+    clearUnlockTimer();
+    localStorage.removeItem("smartUnlockUnlockedUntil");
+    resetLatestTestEvaluationData();
+    setCycleActive(true);
+    setTestModeEnabled(true);
+    showLockedStudentGate();
+    prototypeDemoModeActive = false;
+    initializeRoundFromQuestions(getRandomQuestionsByYear(eligible.grade, desiredCount, eligible.questions));
+    renderQuestion();
+  } finally {
+    studyGuidedTestApplying = false;
+    refreshStudyGuidedTestUi();
   }
 }
 
@@ -5864,10 +8204,12 @@ function renderStudyGuidedExplanation() {
   if (!shouldShow) {
     stopStudyGuidedAudioPlayback();
     studyGuidedExplanationBody.innerHTML = "";
+    updateStudyGuidedFollowupComposerVisibility();
     return;
   }
 
   stopStudyGuidedAudioPlayback();
+  syncStudyGuidedTestState();
 
   const introHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.intro || "Essa informação não está no material enviado",
@@ -5880,78 +8222,282 @@ function renderStudyGuidedExplanation() {
   const visualExampleHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.visualExample || "Essa informação não está no material enviado",
   );
+  const isCompatibilityWarning = studyGuidedExplanationState?.metadata?.isCompatible === false;
+  const showStepsAudioButton = !studyGuidedExplanationState.errorMessage && steps.length > 0;
+  syncStudyGuidedReflectionState();
+  const reflectionText = getStudyGuidedReflectionText();
+  const shouldBlurExplanation = isStudyGuidedReflectionBlurLocked();
   const errorMessage = studyGuidedExplanationState.errorMessage
     ? `
       <section class="study-guided-explanation-section study-guided-explanation-section--warning">
-        <h4 class="study-guided-explanation-section-title">Falha da API</h4>
+        <h4 class="study-guided-explanation-section-title">${isCompatibilityWarning ? "Aviso do estudo" : "Falha da API"}</h4>
         <p>${escapeHtml(studyGuidedExplanationState.errorMessage)}</p>
       </section>
     `
     : "";
 
   studyGuidedExplanationBody.innerHTML = `
-    <section class="study-guided-explanation-section">
-      <div class="study-guided-explanation-section-head study-guided-explanation-section-head--actions-only">
-        <button type="button" class="study-guided-audio-button" data-speech-section="intro" aria-pressed="false">
-          <span class="study-guided-audio-button__label">Ouvir</span>
-          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
-        </button>
+    <div class="study-guided-explanation-content${shouldBlurExplanation ? " is-blurred" : ""}">
+      <div class="study-guided-explanation-group">
+        <div class="study-guided-explanation-actions">
+          <h4 class="study-guided-explanation-section-title">Conteúdo</h4>
+        </div>
+        <section class="study-guided-explanation-section">
+          ${introHtml}
+        </section>
       </div>
-      ${introHtml}
-    </section>
-    <section class="study-guided-explanation-section">
-      <div class="study-guided-explanation-section-head">
-        <h4 class="study-guided-explanation-section-title">Explicação passo a passo</h4>
-        <button type="button" class="study-guided-audio-button" data-speech-section="steps" aria-pressed="false">
-          <span class="study-guided-audio-button__label">Ouvir</span>
-          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
-        </button>
+      <div class="study-guided-explanation-group">
+        <div class="study-guided-explanation-actions">
+          <h4 class="study-guided-explanation-section-title">Explicação passo a passo</h4>
+          ${showStepsAudioButton ? `
+          <div class="study-guided-audio-shell" data-speech-shell="steps">
+            <button type="button" class="study-guided-audio-button" data-speech-section="steps" aria-pressed="false">
+              <span class="study-guided-audio-button__spinner" aria-hidden="true"></span>
+              <span class="study-guided-audio-button__label">Ouvir</span>
+              <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
+            </button>
+            <div class="study-guided-audio-controls" hidden>
+              <button type="button" class="study-guided-audio-control-button" data-audio-control="backward" aria-label="Voltar áudio">
+                <span class="study-guided-audio-control-button__skip study-guided-audio-control-button__skip--backward" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="study-guided-audio-control-button" data-audio-control="pause" aria-label="Pausar áudio">
+                <span class="study-guided-audio-control-button__pause" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="study-guided-audio-control-button" data-audio-control="play" aria-label="Continuar áudio">
+                <span class="study-guided-audio-control-button__play" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+          ` : ""}
+        </div>
+        <section class="study-guided-explanation-section">
+          <ol class="study-guided-explanation-steps">
+            ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+          </ol>
+        </section>
       </div>
-      <ol class="study-guided-explanation-steps">
-        ${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
-      </ol>
-    </section>
-    <section class="study-guided-explanation-section">
-      <div class="study-guided-explanation-section-head">
-        <h4 class="study-guided-explanation-section-title">Exemplo</h4>
-        <button type="button" class="study-guided-audio-button" data-speech-section="example" aria-pressed="false">
-          <span class="study-guided-audio-button__label">Ouvir</span>
-          <span class="study-guided-audio-button__icon" aria-hidden="true"></span>
-        </button>
+    </div>
+    <div class="study-guided-explanation-group study-guided-followup-group" data-study-guided-followup-group hidden>
+      <div class="study-guided-explanation-actions">
+        <h4 class="study-guided-explanation-section-title">Perguntas complementares</h4>
       </div>
-      ${visualExampleHtml}
-    </section>
+      <section class="study-guided-explanation-section">
+        <div class="study-guided-followup-history" data-study-guided-followup-history></div>
+      </section>
+    </div>
+    <div class="study-guided-explanation-group study-guided-test-group" data-study-guided-test-group hidden></div>
     ${errorMessage}
   `;
 
   setStudyGuidedAudioButtonState();
+  bindStudyGuidedReflectionEvaluateButton();
+  refreshStudyGuidedReflectionUi();
+  refreshStudyGuidedTestUi();
+  refreshStudyGuidedFollowupUi();
+  scheduleStudyGuidedStagnationPrompt();
 }
 
 studyGuidedExplanationBody?.addEventListener("click", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target) return;
+
+  const controlButton = target.closest(".study-guided-audio-control-button");
+  if (controlButton instanceof HTMLElement) {
+    const control = String(controlButton.dataset.audioControl || "");
+    if (control === "backward") {
+      seekStudyGuidedAudioPlayback(-5);
+      return;
+    }
+    if (control === "pause") {
+      pauseStudyGuidedAudioPlayback();
+      return;
+    }
+    if (control === "play") {
+      resumeStudyGuidedAudioPlayback();
+      return;
+    }
+    if (control === "forward") {
+      seekStudyGuidedAudioPlayback(5);
+      return;
+    }
+  }
+
+  const button = target.closest(".study-guided-audio-button");
+  if (!(button instanceof HTMLElement)) return;
+  playStudyGuidedSectionAudio(String(button.dataset.speechSection || ""));
+});
+
+studyGuidedExplanationBody?.addEventListener("input", (event) => {
+  const textarea = event.target instanceof HTMLTextAreaElement
+    ? event.target.closest(".study-guided-reflection-textarea")
+    : null;
+  if (!textarea) return;
+  setStudyGuidedReflectionText(textarea.value);
+  const immediatePayload = buildStudyGuidedWritingEvaluationRequest("progress");
+  if (immediatePayload) {
+    updateStudyGuidedReflectionProgress(buildStudyGuidedLocalProgressEvaluation(immediatePayload.request));
+  } else {
+    updateStudyGuidedReflectionBlurState();
+  }
+  refreshStudyGuidedReflectionUi();
+  scheduleStudyGuidedStagnationPrompt();
+  queueStudyGuidedReflectionProgressAnalysis();
+});
+
+studyGuidedExplanationBody?.addEventListener("click", (event) => {
   const button = event.target instanceof HTMLElement
-    ? event.target.closest(".study-guided-audio-button")
+    ? event.target.closest("[data-study-guided-evaluate]")
     : null;
   if (!button) return;
-  playStudyGuidedSectionAudio(String(button.dataset.speechSection || ""));
+  void handleStudyGuidedFinalEvaluation();
+});
+
+studyGuidedExplanationBody?.addEventListener("click", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target) return;
+
+  const countOption = target.closest("[data-study-guided-test-count-option]");
+  if (countOption instanceof HTMLElement) {
+    const nextCount = Math.max(1, Number(countOption.dataset.studyGuidedTestCountOption || 5));
+    updateStudyGuidedTestDraft(
+      {
+        count: nextCount,
+        previewOpen: false,
+      },
+      { clearGeneratedState: true },
+    );
+    closeStudyGuidedTestCountMenu();
+    return;
+  }
+
+  const countTrigger = target.closest("[data-study-guided-test-count-trigger]");
+  if (countTrigger instanceof HTMLElement) {
+    const shell = countTrigger.closest("[data-study-guided-test-count-shell]");
+    const menu = shell?.querySelector("[data-study-guided-test-count-menu]");
+    const isOpen = countTrigger.getAttribute("aria-expanded") === "true";
+    countTrigger.setAttribute("aria-expanded", isOpen ? "false" : "true");
+    shell?.classList.toggle("is-open", !isOpen);
+    if (menu instanceof HTMLElement) {
+      menu.hidden = isOpen;
+    }
+    return;
+  }
+
+  const previewToggle = target.closest("[data-study-guided-test-preview-toggle]");
+  if (previewToggle instanceof HTMLElement) {
+    return;
+  }
+
+  const generateButton = target.closest("[data-study-guided-test-generate]");
+  if (generateButton instanceof HTMLElement) {
+    void handleStudyGuidedGenerateTest();
+    return;
+  }
+
+  const applyButton = target.closest("[data-study-guided-test-apply]");
+  if (applyButton instanceof HTMLElement) {
+    applyStudyGuidedGeneratedTestRound();
+  }
+});
+
+studyGuidedExplanationBody?.addEventListener("change", (event) => {
+  const input = event.target instanceof HTMLInputElement
+    ? event.target.closest("[data-study-guided-test-type]")
+    : null;
+  if (!(input instanceof HTMLInputElement)) return;
+
+  const currentDraft = getStudyGuidedTestDraft();
+  const nextTypes = {
+    choice: input.dataset.studyGuidedTestType === "choice" ? input.checked : currentDraft.questionTypes.choice,
+    text: input.dataset.studyGuidedTestType === "text" ? input.checked : currentDraft.questionTypes.text,
+  };
+
+  updateStudyGuidedTestDraft(
+    {
+      questionTypes: nextTypes,
+      previewOpen: false,
+    },
+    { clearGeneratedState: true },
+  );
+});
+
+studyGuidedExplanationBody?.addEventListener("mouseover", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target) return;
+
+  const previewToggle = target.closest("[data-study-guided-test-preview-toggle]");
+  const previewPanel = target.closest("[data-study-guided-test-preview-panel]");
+  if (!previewToggle && !previewPanel) return;
+
+  const fromElement = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+  if (fromElement && ((previewToggle instanceof HTMLElement && previewToggle.contains(fromElement))
+    || (previewPanel instanceof HTMLElement && previewPanel.contains(fromElement)))) {
+    return;
+  }
+
+  updateStudyGuidedTestDraft({ previewOpen: true });
+});
+
+studyGuidedExplanationBody?.addEventListener("mouseout", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target) return;
+
+  const previewToggle = target.closest("[data-study-guided-test-preview-toggle]");
+  const previewPanel = target.closest("[data-study-guided-test-preview-panel]");
+  if (!previewToggle && !previewPanel) return;
+
+  const toElement = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+  if (toElement && ((previewToggle instanceof HTMLElement && previewToggle.contains(toElement))
+    || (previewPanel instanceof HTMLElement && previewPanel.contains(toElement)))) {
+    return;
+  }
+
+  updateStudyGuidedTestDraft({ previewOpen: false });
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (!target?.closest("[data-study-guided-test-count-shell]")) {
+    closeStudyGuidedTestCountMenu();
+  }
 });
 
 function setStudyGuidedExplanation(data) {
   resetStudyGuidedAudioUsage();
+  clearStudyGuidedAudioPreloadedSources();
+  clearStudyGuidedReflectionTimers();
 
   if (!data) {
     studyGuidedExplanationState = null;
+    studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
+    studyGuidedConversationState = createEmptyStudyGuidedConversationState();
     localStorage.removeItem(studyGuidedExplanationStorageKey);
+    localStorage.removeItem(studyGuidedReflectionStorageKey);
+    localStorage.removeItem(studyGuidedConversationStorageKey);
+    saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
+    clearStudyGuidedTestQuestionBank();
+    localStorage.removeItem(studyGuidedTestMetaStorageKey);
     renderStudyGuidedExplanation();
     return;
   }
 
   studyGuidedExplanationState = parseStudyGuidedExplanationStorage(JSON.stringify(data));
   if (!studyGuidedExplanationState) {
+    studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
+    studyGuidedConversationState = createEmptyStudyGuidedConversationState();
     localStorage.removeItem(studyGuidedExplanationStorageKey);
+    localStorage.removeItem(studyGuidedReflectionStorageKey);
+    localStorage.removeItem(studyGuidedConversationStorageKey);
+    saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
+    clearStudyGuidedTestQuestionBank();
+    localStorage.removeItem(studyGuidedTestMetaStorageKey);
     renderStudyGuidedExplanation();
     return;
   }
 
+  syncStudyGuidedReflectionState();
+  syncStudyGuidedTestState();
+  syncStudyGuidedConversationState();
   localStorage.setItem(studyGuidedExplanationStorageKey, JSON.stringify(studyGuidedExplanationState));
   renderStudyGuidedExplanation();
 }
@@ -6528,6 +9074,7 @@ function renderParentDashboard() {
   renderStudyGuidedUploadPreview();
   renderStudyGuidedExplanation();
   if (aiDashboardKnowledge) {
+    aiDashboardKnowledge.placeholder = studyGuidedKnowledgePlaceholder;
     aiDashboardKnowledge.value = parentDashboardMode === "study-guided"
       ? getStudyGuidedKnowledge()
       : String(getAiGenerationDraft()?.knowledge || "");
@@ -7460,6 +10007,24 @@ if (setupWarningOverlay) {
   setupWarningOverlay.addEventListener("click", closeSetupWarningModal);
 }
 
+if (studyGuidedReplayCancelButton) {
+  studyGuidedReplayCancelButton.addEventListener("click", () => {
+    settleStudyGuidedReplayModal(false);
+  });
+}
+
+if (studyGuidedReplayConfirmButton) {
+  studyGuidedReplayConfirmButton.addEventListener("click", () => {
+    settleStudyGuidedReplayModal(true);
+  });
+}
+
+if (studyGuidedReplayOverlay) {
+  studyGuidedReplayOverlay.addEventListener("click", () => {
+    settleStudyGuidedReplayModal(false);
+  });
+}
+
 if (aiGenerationCancelButton) {
   aiGenerationCancelButton.addEventListener("click", closeAiGenerationModal);
 }
@@ -7578,6 +10143,10 @@ if (testLogoutButton) {
   testLogoutButton.addEventListener("click", openTestLogoutModal);
 }
 
+if (testSummaryExitButton) {
+  testSummaryExitButton.addEventListener("click", forceResponsibleLogoutFromTest);
+}
+
 if (testLogoutCancelButton) {
   testLogoutCancelButton.addEventListener("click", closeTestLogoutModal);
 }
@@ -7588,21 +10157,6 @@ if (testLogoutOverlay) {
 
 if (testLogoutConfirmButton) {
   testLogoutConfirmButton.addEventListener("click", () => {
-    const password = String(testLogoutPasswordInput?.value || "");
-    if (!password) {
-      if (testLogoutError) {
-        testLogoutError.textContent = "Digite a senha do responsável.";
-      }
-      testLogoutPasswordInput?.focus();
-      return;
-    }
-    if (password !== getParentPassword()) {
-      if (testLogoutError) {
-        testLogoutError.textContent = "Senha incorreta.";
-      }
-      testLogoutPasswordInput?.select();
-      return;
-    }
     forceResponsibleLogoutFromTest();
   });
 }
@@ -7901,6 +10455,11 @@ if (importCurrentGradeButton) {
           if (aiDashboardKnowledge) aiDashboardKnowledge.value = persistedStudyGuidedKnowledge;
         }
         setStudyGuidedExplanation(generatedExplanation);
+        try {
+          await preloadStudyGuidedSectionAudio("steps");
+        } catch (audioError) {
+          console.error("[Study guided audio preload] Falha ao pré-carregar o áudio:", audioError);
+        }
       } catch (error) {
         openSetupWarningModal(error instanceof Error ? error.message : "Não foi possível gerar a explicação do estudo.");
         importCurrentGradeButton.disabled = false;
@@ -8077,6 +10636,24 @@ if (studyGuidedUploadRemoveButtons.length) {
   });
 }
 
+if (studyGuidedCameraButton) {
+  studyGuidedCameraButton.addEventListener("click", () => {
+    if (getParentDashboardMode() !== "study-guided") return;
+
+    if (studyGuidedUploadPreviewDataUrls.length >= 3) {
+      openSetupWarningModal("Voce pode carregar no maximo 3 imagens por rodada de estudo.");
+      return;
+    }
+
+    if (canUseNativeStudyGuidedCamera()) {
+      window.SmartUnlockNative.openStudyGuidedCamera();
+      return;
+    }
+
+    openSetupWarningModal("Tirar foto direto funciona no aplicativo Android. Aqui no preview, use Fazer upload.");
+  });
+}
+
 if (questionBankPreviewShell && questionBankPreviewButton) {
   const supportsHoverPreview = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
@@ -8096,15 +10673,18 @@ if (questionBankPreviewShell && questionBankPreviewButton) {
     if (getParentDashboardMode() === "study-guided") {
       setQuestionBankPreviewOpen(false);
       questionFileInput?.click();
-      return;
     }
-    toggleQuestionBankPreview();
   });
 
   if (supportsHoverPreview) {
     questionBankPreviewButton.addEventListener("focus", () => {
       if (getParentDashboardMode() === "study-guided") return;
       setQuestionBankPreviewOpen(true);
+    });
+
+    questionBankPreviewButton.addEventListener("blur", () => {
+      if (getParentDashboardMode() === "study-guided") return;
+      setQuestionBankPreviewOpen(false);
     });
   }
 }

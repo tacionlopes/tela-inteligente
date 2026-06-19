@@ -1,6 +1,5 @@
 (() => {
   const productionBaseUrl = "https://desbloqueio-inteligente-app.vercel.app";
-  const hostname = window.location?.hostname || "";
   const protocol = window.location?.protocol || "";
   const shouldUseProductionApi = protocol === "file:";
 
@@ -9,7 +8,9 @@
     baseUrl: shouldUseProductionApi ? productionBaseUrl : "",
     generateQuestionsPath: "/api/ai/generate-questions",
     generateStudyPath: "/api/ai/generate-study-explanation",
+    generateStudyFollowupPath: "/api/ai/generate-study-followup",
     generateStudyAudioPath: "/api/ai/generate-study-audio",
-    timeoutMs: 18000,
+    evaluateStudyWritingPath: "/api/ai/evaluate-study-writing",
+    timeoutMs: 45000,
   };
 })();
