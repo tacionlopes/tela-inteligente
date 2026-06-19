@@ -60,7 +60,9 @@ function getStudyGuidedDisplaySubject(subject) {
 
 function detectStudyGuidedLikelySubjectFromText(rawText) {
   const text = normalizePlainText(rawText);
-  if (!text) return "";
+  if (!text) {
+    return { subject: "", score: 0 };
+  }
 
   let bestSubject = "";
   let bestScore = 0;
@@ -76,7 +78,10 @@ function detectStudyGuidedLikelySubjectFromText(rawText) {
     }
   });
 
-  return bestScore > 0 ? bestSubject : "";
+  return {
+    subject: bestScore > 0 ? bestSubject : "",
+    score: bestScore,
+  };
 }
 
 function sendJson(response, statusCode, payload) {
@@ -156,21 +161,15 @@ function validateStudyFollowupRequest(request) {
 
 function validateStudyFollowupCompatibility(request) {
   const selectedSubjectLabel = getStudyGuidedDisplaySubject(request.subjects[0]);
-  const combinedReference = [
-    String(request.knowledgeBase || "").trim(),
-    String(request.explanation?.intro || "").trim(),
-    ...(Array.isArray(request.explanation?.steps) ? request.explanation.steps : []),
-  ].filter(Boolean).join(" ");
   const question = String(request.question || "").trim();
 
-  const detectedQuestionSubject = detectStudyGuidedLikelySubjectFromText(question);
-  const detectedReferenceSubject = detectStudyGuidedLikelySubjectFromText(combinedReference);
+  const detectedQuestion = detectStudyGuidedLikelySubjectFromText(question);
 
-  if (detectedQuestionSubject && detectedQuestionSubject !== selectedSubjectLabel) {
-    return { ok: false, response: buildInvalidResponse(request) };
-  }
-
-  if (detectedReferenceSubject && detectedReferenceSubject !== selectedSubjectLabel) {
+  if (
+    detectedQuestion.subject
+    && detectedQuestion.subject !== selectedSubjectLabel
+    && detectedQuestion.score >= 2
+  ) {
     return { ok: false, response: buildInvalidResponse(request) };
   }
 
@@ -203,6 +202,9 @@ function buildSystemPrompt(request) {
     `Matéria selecionada: ${subjectLabel}.`,
     `Ano/Nível selecionado: ${String(request.grade || "").trim()}.`,
     `Se a pergunta NÃO estiver relacionada, responda exatamente com: ${STUDY_GUIDED_FOLLOWUP_INVALID_MESSAGE}`,
+    "Se a pergunta estiver relacionada ao tema atual, responda diretamente o que o aluno perguntou logo na primeira frase.",
+    "Não devolva um resumo padrão do conteúdo se a pergunta do aluno for específica.",
+    "Se o conteúdo estudado for uma guerra, perguntas sobre alianças, países, líderes, datas, grupos perseguidos, causas, consequências e acontecimentos do conflito contam como relacionadas.",
     "Se estiver relacionada, responda como continuação da conversa, com linguagem simples, clara e útil.",
     "Você pode aprofundar conceitos, dar exemplos e tirar dúvidas, mas sem trocar de matéria.",
     "A resposta deve ser complementar ao conteúdo já mostrado na tela, e não um novo estudo completo.",
