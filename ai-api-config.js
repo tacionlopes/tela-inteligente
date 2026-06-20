@@ -10,6 +10,7 @@
     generateStudyPath: "/api/ai/generate-study-explanation",
     generateStudyFollowupPath: "/api/ai/generate-study-followup",
     generateStudyAudioPath: "/api/ai/generate-study-audio",
+    exportStudyDocxPath: "/api/ai/export-study-docx",
     evaluateStudyWritingPath: "/api/ai/evaluate-study-writing",
     timeoutMs: 45000,
   };

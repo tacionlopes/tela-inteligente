@@ -10,6 +10,9 @@ const port = Number(process.env.PORT || 4173);
 const require = createRequire(import.meta.url);
 const generateQuestionsHandler = require(join(sourceRootDir, "api/ai/generate-questions.js"));
 const generateStudyExplanationHandler = require(join(sourceRootDir, "api/ai/generate-study-explanation.js"));
+const generateStudyAudioHandler = require(join(sourceRootDir, "api/ai/generate-study-audio.js"));
+const generateStudyFollowupHandler = require(join(sourceRootDir, "api/ai/generate-study-followup.js"));
+const exportStudyDocxHandler = require(join(sourceRootDir, "api/ai/export-study-docx.js"));
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -30,6 +33,21 @@ const server = createServer((request, response) => {
 
   if (pathname === "/api/ai/generate-study-explanation") {
     generateStudyExplanationHandler(request, response);
+    return;
+  }
+
+  if (pathname === "/api/ai/generate-study-audio") {
+    generateStudyAudioHandler(request, response);
+    return;
+  }
+
+  if (pathname === "/api/ai/generate-study-followup") {
+    generateStudyFollowupHandler(request, response);
+    return;
+  }
+
+  if (pathname === "/api/ai/export-study-docx") {
+    exportStudyDocxHandler(request, response);
     return;
   }
 

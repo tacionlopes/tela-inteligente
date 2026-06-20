@@ -419,12 +419,7 @@ function syncStudyGuidedPreviewVersion() {
   const previewVersion = new URLSearchParams(window.location.search).get("v") || "";
   if (!previewVersion) return;
 
-  const isLocalPreviewRuntime = ["127.0.0.1", "localhost"].includes(window.location.hostname);
   const lastPreviewVersion = String(localStorage.getItem(studyGuidedPreviewVersionStorageKey) || "");
-  if (isLocalPreviewRuntime || (lastPreviewVersion && lastPreviewVersion !== previewVersion)) {
-    localStorage.removeItem(studyGuidedExplanationStorageKey);
-    localStorage.removeItem(studyGuidedReflectionStorageKey);
-  }
 
   if (lastPreviewVersion !== previewVersion) {
     localStorage.setItem(studyGuidedPreviewVersionStorageKey, previewVersion);
@@ -450,6 +445,10 @@ let studyGuidedTestDraft = parseStudyGuidedTestDraft(
 let studyGuidedTestGenerating = false;
 let studyGuidedTestApplying = false;
 let studyGuidedFollowupGenerating = false;
+let studyGuidedFollowupTypingTimeoutId = 0;
+let studyGuidedFollowupTypingMessageId = "";
+let studyGuidedFollowupTypingText = "";
+let studyGuidedFollowupTypingVisibleChars = 0;
 const optionalLibsState = {
   xlsxLoading: false,
   firebaseLoading: false,
@@ -610,6 +609,7 @@ function appendStudyGuidedConversationMessage(role, text) {
 
   studyGuidedConversationState.messages = [...getStudyGuidedConversationMessages(), nextMessage].slice(-20);
   saveStudyGuidedConversationState();
+  return nextMessage;
 }
 
 function parseStudyGuidedTestDraft(rawValue) {
@@ -2777,6 +2777,7 @@ function getAiApiConfig() {
     generateStudyPath: String(rawConfig.generateStudyPath || "/api/ai/generate-study-explanation").trim() || "/api/ai/generate-study-explanation",
     generateStudyFollowupPath: String(rawConfig.generateStudyFollowupPath || "/api/ai/generate-study-followup").trim() || "/api/ai/generate-study-followup",
     generateStudyAudioPath: String(rawConfig.generateStudyAudioPath || "/api/ai/generate-study-audio").trim() || "/api/ai/generate-study-audio",
+    exportStudyDocxPath: String(rawConfig.exportStudyDocxPath || "/api/ai/export-study-docx").trim() || "/api/ai/export-study-docx",
     evaluateStudyWritingPath: String(rawConfig.evaluateStudyWritingPath || "/api/ai/evaluate-study-writing").trim() || "/api/ai/evaluate-study-writing",
     timeoutMs: Math.max(1000, Number(rawConfig.timeoutMs || 30000)),
   };
@@ -2812,6 +2813,14 @@ function getAiGenerateStudyAudioUrl(config = getAiApiConfig()) {
   }
 
   return new URL(config.generateStudyAudioPath, config.baseUrl).toString();
+}
+
+function getAiExportStudyDocxUrl(config = getAiApiConfig()) {
+  if (!config.baseUrl) {
+    return config.exportStudyDocxPath;
+  }
+
+  return new URL(config.exportStudyDocxPath, config.baseUrl).toString();
 }
 
 function getAiEvaluateStudyWritingUrl(config = getAiApiConfig()) {
@@ -4848,6 +4857,50 @@ function getSelectedGrade() {
   }
 
   return configuredGrade;
+}
+
+function ensureStudyGuidedSelectionPersistence() {
+  if (!studyGuidedExplanationState?.explanation) return;
+
+  const persistedGrade = normalizeSupportedStudentGrade(studyGuidedExplanationState.metadata?.grade || "");
+  const persistedSubjects = Array.isArray(studyGuidedExplanationState.metadata?.subjects)
+    ? studyGuidedExplanationState.metadata.subjects.map((subject) => normalizeSubjectName(subject)).filter(Boolean)
+    : [];
+
+  if (!persistedGrade || !persistedSubjects.length) return;
+
+  localStorage.setItem("smartUnlockStudentGrade", persistedGrade);
+  updateInitialSetup({ grade: persistedGrade });
+
+  if (staticParentPrototypeMode) {
+    prototypeSelectedGradeGroup = ["3º", "4º", "5º"].includes(persistedGrade) ? "lower" : "upper";
+    if (["3º", "4º", "5º"].includes(persistedGrade) && studentGradeDisplay) {
+      studentGradeDisplay.value = persistedGrade;
+    }
+    if (["6º", "7º", "8º", "9º"].includes(persistedGrade) && studentGradeDisplayUpper) {
+      studentGradeDisplayUpper.value = persistedGrade;
+    }
+    syncStudentGradePrototypeLabel();
+    syncStudentGradeUpperPrototypeLabel();
+  } else {
+    renderStudentGradeDisplay();
+  }
+
+  const subjectStore = getSubjectChecksStore();
+  const activeStore = getActiveSubjectsStore();
+  if (!subjectStore[persistedGrade]) {
+    subjectStore[persistedGrade] = trackedSubjects.reduce((accumulator, name) => {
+      accumulator[name] = false;
+      return accumulator;
+    }, {});
+  }
+
+  trackedSubjects.forEach((subject) => {
+    subjectStore[persistedGrade][subject] = persistedSubjects.includes(normalizeSubjectName(subject));
+  });
+  activeStore[persistedGrade] = [...persistedSubjects];
+  saveSubjectChecksStore(subjectStore);
+  saveActiveSubjectsStore(activeStore);
 }
 
 function getPrototypePrimarySubject(grade = getSelectedGrade()) {
@@ -7166,7 +7219,8 @@ function renderStudyGuidedUploadPreview() {
   });
 }
 
-function setStudyGuidedUploadPreview(dataUrls) {
+function setStudyGuidedUploadPreview(dataUrls, options = {}) {
+  const shouldClearExplanation = options.clearExplanation !== false;
   studyGuidedUploadPreviewDataUrls = Array.isArray(dataUrls) ? dataUrls.filter(Boolean).slice(0, 3) : [];
 
   try {
@@ -7180,7 +7234,9 @@ function setStudyGuidedUploadPreview(dataUrls) {
   }
 
   renderStudyGuidedUploadPreview();
-  setStudyGuidedExplanation(null);
+  if (shouldClearExplanation) {
+    setStudyGuidedExplanation(null);
+  }
 }
 
 function appendStudyGuidedCapturedImage(dataUrl) {
@@ -7192,7 +7248,7 @@ function appendStudyGuidedCapturedImage(dataUrl) {
     return;
   }
 
-  setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, dataUrl].slice(0, 3));
+  setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, dataUrl].slice(0, 3), { clearExplanation: false });
   prototypeImportStatusMessage = "";
   if (questionBankStatus) {
     questionBankStatus.hidden = true;
@@ -7272,7 +7328,7 @@ function parseStudyGuidedUploadPreviewStorage(rawValue) {
 function removeStudyGuidedUploadPreviewImage(indexToRemove) {
   if (indexToRemove < 0 || indexToRemove >= studyGuidedUploadPreviewDataUrls.length) return;
   const nextImages = studyGuidedUploadPreviewDataUrls.filter((_, index) => index !== indexToRemove);
-  setStudyGuidedUploadPreview(nextImages);
+  setStudyGuidedUploadPreview(nextImages, { clearExplanation: false });
 }
 
 window.__smartUnlockReceiveStudyGuidedCameraImage = function (dataUrl) {
@@ -7325,8 +7381,19 @@ function formatStudyGuidedFollowupAnswerHtml(text) {
     pendingListItems = [];
   };
 
-  const formatInline = (value) => escapeHtml(String(value || ""))
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  const linkifyInlineUrls = (value) => String(value || "").replace(
+    /(https?:\/\/[^\s<]+)/g,
+    (match) => {
+      const safeUrl = match.replace(/[),.;!?]+$/, "");
+      const trailing = match.slice(safeUrl.length);
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>${trailing}`;
+    }
+  );
+
+  const formatInline = (value) => linkifyInlineUrls(
+    escapeHtml(String(value || ""))
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+  );
 
   lines.forEach((line) => {
     const bulletMatch = line.match(/^(?:[-*]\s+|\d+\)\s*|\d+\.\s*)(.+)$/);
@@ -7942,10 +8009,10 @@ function getStudyGuidedFollowupHistoryHtml() {
   if (!messages.length) return "";
 
   return messages.map((message) => `
-    <article class="study-guided-followup-message study-guided-followup-message--${message.role}">
-      <div class="study-guided-followup-message__label">
-        ${message.role === "user" ? "Pergunta" : "Resposta complementar"}
-      </div>
+    <article
+      class="study-guided-followup-message study-guided-followup-message--${message.role}"
+      data-study-guided-message-id="${escapeHtml(message.id || "")}"
+    >
       <div class="study-guided-followup-message__bubble">
         ${message.role === "assistant"
           ? formatStudyGuidedFollowupAnswerHtml(message.text)
@@ -7988,6 +8055,9 @@ function refreshStudyGuidedFollowupUi() {
   }
   if (historyPanel instanceof HTMLElement) {
     historyPanel.innerHTML = getStudyGuidedFollowupHistoryHtml();
+    if (studyGuidedFollowupTypingMessageId && studyGuidedFollowupTypingText) {
+      renderStudyGuidedFollowupTypingFrame();
+    }
   }
 
   if (composer instanceof HTMLElement) {
@@ -8010,6 +8080,91 @@ function refreshStudyGuidedFollowupUi() {
       studyGuidedFollowupGenerating ? "Enviando pergunta complementar" : "Enviar pergunta complementar"
     );
   }
+}
+
+function stopStudyGuidedFollowupTypingAnimation() {
+  if (studyGuidedFollowupTypingTimeoutId) {
+    window.clearTimeout(studyGuidedFollowupTypingTimeoutId);
+    studyGuidedFollowupTypingTimeoutId = 0;
+  }
+}
+
+function finalizeStudyGuidedFollowupTypingAnimation() {
+  stopStudyGuidedFollowupTypingAnimation();
+  if (!studyGuidedFollowupTypingMessageId || !studyGuidedFollowupTypingText) {
+    studyGuidedFollowupTypingMessageId = "";
+    studyGuidedFollowupTypingText = "";
+    studyGuidedFollowupTypingVisibleChars = 0;
+    return;
+  }
+
+  const historyPanel = studyGuidedExplanationBody?.querySelector("[data-study-guided-followup-history]");
+  const bubble = historyPanel?.querySelector(
+    `[data-study-guided-message-id="${CSS.escape(studyGuidedFollowupTypingMessageId)}"] .study-guided-followup-message__bubble`
+  );
+  if (bubble instanceof HTMLElement) {
+    bubble.innerHTML = formatStudyGuidedFollowupAnswerHtml(studyGuidedFollowupTypingText);
+  }
+  studyGuidedFollowupTypingMessageId = "";
+  studyGuidedFollowupTypingText = "";
+  studyGuidedFollowupTypingVisibleChars = 0;
+}
+
+function renderStudyGuidedFollowupTypingFrame() {
+  if (!studyGuidedFollowupTypingMessageId || !studyGuidedFollowupTypingText) return;
+  const historyPanel = studyGuidedExplanationBody?.querySelector("[data-study-guided-followup-history]");
+  const bubble = historyPanel?.querySelector(
+    `[data-study-guided-message-id="${CSS.escape(studyGuidedFollowupTypingMessageId)}"] .study-guided-followup-message__bubble`
+  );
+  if (!(bubble instanceof HTMLElement)) return;
+
+  const partialText = studyGuidedFollowupTypingText.slice(
+    0,
+    Math.max(0, Math.min(studyGuidedFollowupTypingText.length, studyGuidedFollowupTypingVisibleChars))
+  );
+  bubble.innerHTML = `
+    <div class="study-guided-followup-typing">
+      ${escapeHtml(partialText).replace(/\n/g, "<br />")}
+    </div>
+  `;
+}
+
+function animateStudyGuidedFollowupAssistantMessage(messageId, text) {
+  const normalizedText = String(text || "").trim();
+  if (!messageId || !normalizedText) return;
+
+  finalizeStudyGuidedFollowupTypingAnimation();
+  studyGuidedFollowupTypingMessageId = messageId;
+  studyGuidedFollowupTypingText = normalizedText;
+  studyGuidedFollowupTypingVisibleChars = 0;
+
+  const step = () => {
+    const remaining = studyGuidedFollowupTypingText.length - studyGuidedFollowupTypingVisibleChars;
+    if (remaining <= 0) {
+      finalizeStudyGuidedFollowupTypingAnimation();
+      scrollStudyGuidedConversationToBottom();
+      return;
+    }
+
+    const increment = remaining > 320 ? 18 : remaining > 180 ? 12 : remaining > 90 ? 8 : 4;
+    studyGuidedFollowupTypingVisibleChars = Math.min(
+      studyGuidedFollowupTypingText.length,
+      studyGuidedFollowupTypingVisibleChars + increment
+    );
+    renderStudyGuidedFollowupTypingFrame();
+    scrollStudyGuidedConversationToBottom();
+
+    if (studyGuidedFollowupTypingVisibleChars >= studyGuidedFollowupTypingText.length) {
+      finalizeStudyGuidedFollowupTypingAnimation();
+      scrollStudyGuidedConversationToBottom();
+      return;
+    }
+
+    studyGuidedFollowupTypingTimeoutId = window.setTimeout(step, 24);
+  };
+
+  renderStudyGuidedFollowupTypingFrame();
+  studyGuidedFollowupTypingTimeoutId = window.setTimeout(step, 24);
 }
 
 function scrollStudyGuidedConversationToBottom() {
@@ -8044,6 +8199,7 @@ async function handleStudyGuidedFollowupSubmit() {
   }
 
   studyGuidedFollowupGenerating = true;
+  finalizeStudyGuidedFollowupTypingAnimation();
   appendStudyGuidedConversationMessage("user", question);
   input.value = "";
   refreshStudyGuidedFollowupUi();
@@ -8054,14 +8210,24 @@ async function handleStudyGuidedFollowupSubmit() {
     const answerText = response?.compatible === false
       ? studyGuidedFollowupInvalidMessage
       : String(response?.message || "").trim() || "Não consegui complementar esse ponto agora.";
-    appendStudyGuidedConversationMessage("assistant", answerText);
+    const assistantMessage = appendStudyGuidedConversationMessage("assistant", answerText);
+    refreshStudyGuidedFollowupUi();
+    scrollStudyGuidedConversationToBottom();
+    if (assistantMessage?.id) {
+      animateStudyGuidedFollowupAssistantMessage(assistantMessage.id, answerText);
+    }
   } catch (error) {
-    appendStudyGuidedConversationMessage(
+    const assistantMessage = appendStudyGuidedConversationMessage(
       "assistant",
       error instanceof Error && error.message
         ? error.message
         : "Não foi possível responder essa pergunta complementar agora.",
     );
+    refreshStudyGuidedFollowupUi();
+    scrollStudyGuidedConversationToBottom();
+    if (assistantMessage?.id) {
+      animateStudyGuidedFollowupAssistantMessage(assistantMessage.id, assistantMessage.text);
+    }
   } finally {
     studyGuidedFollowupGenerating = false;
     refreshStudyGuidedFollowupUi();
@@ -8195,6 +8361,58 @@ function applyStudyGuidedGeneratedTestRound() {
   }
 }
 
+async function handleStudyGuidedPdfExport() {
+  if (!studyGuidedExplanationState?.explanation) {
+    openSetupWarningModal("Gere primeiro um Desbloqueio antes de baixar em DOCX.");
+    return;
+  }
+
+  try {
+    const aiApiConfig = getAiApiConfig();
+    const response = await fetch(getAiExportStudyDocxUrl(aiApiConfig), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        metadata: studyGuidedExplanationState.metadata || {},
+        explanation: studyGuidedExplanationState.explanation || {},
+        conversation: getStudyGuidedConversationMessages(),
+      }),
+    });
+
+    if (!response.ok) {
+      let message = "Nao foi possivel baixar o DOCX deste estudo agora.";
+      try {
+        const payload = await response.json();
+        if (payload?.message) {
+          message = String(payload.message);
+        }
+      } catch (_) {
+        // segue com a mensagem padrao
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const contentDisposition = String(response.headers.get("Content-Disposition") || "");
+    const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    link.href = objectUrl;
+    link.download = filenameMatch?.[1] || "desbloqueio-estudo.docx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  } catch (error) {
+    console.error("[Study guided DOCX] Falha ao baixar documento:", error);
+    openSetupWarningModal(error instanceof Error && error.message
+      ? error.message
+      : "Nao foi possivel baixar o DOCX deste estudo agora.");
+  }
+}
+
 function renderStudyGuidedExplanation() {
   if (!studyGuidedExplanationPanel || !studyGuidedExplanationBody) return;
 
@@ -8222,25 +8440,25 @@ function renderStudyGuidedExplanation() {
   const visualExampleHtml = formatStudyGuidedParagraphs(
     studyGuidedExplanationState.explanation.visualExample || "Essa informação não está no material enviado",
   );
-  const isCompatibilityWarning = studyGuidedExplanationState?.metadata?.isCompatible === false;
   const showStepsAudioButton = !studyGuidedExplanationState.errorMessage && steps.length > 0;
   syncStudyGuidedReflectionState();
   const reflectionText = getStudyGuidedReflectionText();
   const shouldBlurExplanation = isStudyGuidedReflectionBlurLocked();
-  const errorMessage = studyGuidedExplanationState.errorMessage
-    ? `
-      <section class="study-guided-explanation-section study-guided-explanation-section--warning">
-        <h4 class="study-guided-explanation-section-title">${isCompatibilityWarning ? "Aviso do estudo" : "Falha da API"}</h4>
-        <p>${escapeHtml(studyGuidedExplanationState.errorMessage)}</p>
-      </section>
-    `
+  const selectedExplanationSubject = Array.isArray(studyGuidedExplanationState.metadata?.subjects)
+    ? studyGuidedExplanationState.metadata.subjects.map((subject) => getSubjectDisplayLabel(subject)).find(Boolean) || ""
     : "";
+  const contentSectionTitleHtml = selectedExplanationSubject
+    ? `Conteúdo: <span class="study-guided-explanation-subject" data-subject-name="${escapeHtml(selectedExplanationSubject)}">${escapeHtml(selectedExplanationSubject)}</span>`
+    : "Conteúdo";
 
   studyGuidedExplanationBody.innerHTML = `
     <div class="study-guided-explanation-content${shouldBlurExplanation ? " is-blurred" : ""}">
       <div class="study-guided-explanation-group">
         <div class="study-guided-explanation-actions">
-          <h4 class="study-guided-explanation-section-title">Conteúdo</h4>
+          <h4 class="study-guided-explanation-section-title">${contentSectionTitleHtml}</h4>
+          <button type="button" class="study-guided-pdf-button" data-study-guided-pdf-button aria-label="Baixar DOCX do estudo">
+            <img src="assets/study-guided-pdf-icon.png" alt="" class="study-guided-pdf-button__icon" />
+          </button>
         </div>
         <section class="study-guided-explanation-section">
           ${introHtml}
@@ -8286,7 +8504,6 @@ function renderStudyGuidedExplanation() {
       </section>
     </div>
     <div class="study-guided-explanation-group study-guided-test-group" data-study-guided-test-group hidden></div>
-    ${errorMessage}
   `;
 
   setStudyGuidedAudioButtonState();
@@ -8297,9 +8514,50 @@ function renderStudyGuidedExplanation() {
   scheduleStudyGuidedStagnationPrompt();
 }
 
+function clearStudyGuidedExplanationState() {
+  studyGuidedExplanationState = null;
+  studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
+  studyGuidedConversationState = createEmptyStudyGuidedConversationState();
+  localStorage.removeItem(studyGuidedExplanationStorageKey);
+  localStorage.removeItem(studyGuidedReflectionStorageKey);
+  localStorage.removeItem(studyGuidedConversationStorageKey);
+  saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
+  clearStudyGuidedTestQuestionBank();
+  localStorage.removeItem(studyGuidedTestMetaStorageKey);
+}
+
+function isStudyGuidedMissingMaterialSummary(text) {
+  const normalized = String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  return normalized.includes("essa informacao nao esta no material enviado")
+    && normalized.includes("tema central deste estudo");
+}
+
+function getBlockedStudyGuidedExplanationMessage(data) {
+  if (data?.errorMessage) {
+    return String(data.errorMessage).trim();
+  }
+
+  if (isStudyGuidedMissingMaterialSummary(data?.explanation?.intro)) {
+    return "Essa informação não está no material enviado.";
+  }
+
+  return "";
+}
+
 studyGuidedExplanationBody?.addEventListener("click", (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;
   if (!target) return;
+
+  const pdfButton = target.closest("[data-study-guided-pdf-button]");
+  if (pdfButton instanceof HTMLElement) {
+    handleStudyGuidedPdfExport();
+    return;
+  }
 
   const controlButton = target.closest(".study-guided-audio-control-button");
   if (controlButton instanceof HTMLElement) {
@@ -8468,30 +8726,23 @@ function setStudyGuidedExplanation(data) {
   clearStudyGuidedReflectionTimers();
 
   if (!data) {
-    studyGuidedExplanationState = null;
-    studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
-    studyGuidedConversationState = createEmptyStudyGuidedConversationState();
-    localStorage.removeItem(studyGuidedExplanationStorageKey);
-    localStorage.removeItem(studyGuidedReflectionStorageKey);
-    localStorage.removeItem(studyGuidedConversationStorageKey);
-    saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
-    clearStudyGuidedTestQuestionBank();
-    localStorage.removeItem(studyGuidedTestMetaStorageKey);
+    clearStudyGuidedExplanationState();
     renderStudyGuidedExplanation();
     return;
   }
 
   studyGuidedExplanationState = parseStudyGuidedExplanationStorage(JSON.stringify(data));
   if (!studyGuidedExplanationState) {
-    studyGuidedReflectionState = createEmptyStudyGuidedReflectionState();
-    studyGuidedConversationState = createEmptyStudyGuidedConversationState();
-    localStorage.removeItem(studyGuidedExplanationStorageKey);
-    localStorage.removeItem(studyGuidedReflectionStorageKey);
-    localStorage.removeItem(studyGuidedConversationStorageKey);
-    saveStudyGuidedTestDraft(createDefaultStudyGuidedTestDraft());
-    clearStudyGuidedTestQuestionBank();
-    localStorage.removeItem(studyGuidedTestMetaStorageKey);
+    clearStudyGuidedExplanationState();
     renderStudyGuidedExplanation();
+    return;
+  }
+
+  const blockedMessage = getBlockedStudyGuidedExplanationMessage(studyGuidedExplanationState);
+  if (blockedMessage) {
+    clearStudyGuidedExplanationState();
+    renderStudyGuidedExplanation();
+    openSetupWarningModal(blockedMessage);
     return;
   }
 
@@ -8879,7 +9130,10 @@ function toggleSubjectCheck(subject, grade = getSelectedGrade()) {
     }, {});
   }
 
-  store[normalizedGrade][normalizedSubject] = !store[normalizedGrade][normalizedSubject];
+  const nextChecked = !store[normalizedGrade][normalizedSubject];
+  trackedSubjects.forEach((name) => {
+    store[normalizedGrade][name] = nextChecked ? name === normalizedSubject : false;
+  });
   saveSubjectChecksStore(store);
 }
 
@@ -9070,6 +9324,9 @@ function renderParentDashboard() {
   parentView?.setAttribute("data-dashboard-mode", parentDashboardMode);
   document.body.classList.toggle("dashboard-mode-study-guided", parentDashboardMode === "study-guided");
   document.body.classList.toggle("dashboard-mode-tests", parentDashboardMode === "tests");
+  if (parentDashboardMode === "study-guided") {
+    ensureStudyGuidedSelectionPersistence();
+  }
   configureQuestionFileInputForCurrentMode();
   renderStudyGuidedUploadPreview();
   renderStudyGuidedExplanation();
@@ -9357,9 +9614,21 @@ function renderSubjectRanking() {
 
   bestSubject.querySelectorAll("[data-subject-check]").forEach((button) => {
     button.addEventListener("click", () => {
+      const currentExplanationSubject = Array.isArray(studyGuidedExplanationState?.metadata?.subjects)
+        ? studyGuidedExplanationState.metadata.subjects.map((subject) => normalizeSubjectName(subject)).find(Boolean) || ""
+        : "";
+      const nextSubject = normalizeSubjectName(button.dataset.subjectCheck || "");
+      const willSwitchSubject = Boolean(
+        studyGuidedExplanationState?.explanation
+        && nextSubject
+        && currentExplanationSubject
+        && currentExplanationSubject !== nextSubject
+        && button.getAttribute("aria-pressed") !== "true"
+      );
+
       if (staticParentPrototypeMode) {
         const nextChecked = button.getAttribute("aria-pressed") !== "true";
-        setPrototypeSubjectCheckForAllGrades(button.dataset.subjectCheck, nextChecked);
+        setPrototypeExclusiveSubjectSelection(button.dataset.subjectCheck, nextChecked);
       } else {
         toggleSubjectCheck(button.dataset.subjectCheck, selectedGrade);
         applyCheckedSubjectsToGrade(selectedGrade);
@@ -9367,6 +9636,10 @@ function renderSubjectRanking() {
       renderSubjectRanking();
       renderAiDashboardConfig();
       renderQuestionBankStatus();
+
+      if (willSwitchSubject) {
+        openSetupWarningModal("Para não perder seu estudo gere um PDF antes de começar outra matéria.");
+      }
     });
   });
 }
@@ -10067,7 +10340,6 @@ if (aiDashboardKnowledge) {
   aiDashboardKnowledge.addEventListener("input", () => {
     if (getParentDashboardMode() === "study-guided") {
       setStudyGuidedKnowledge(aiDashboardKnowledge.value || "");
-      setStudyGuidedExplanation(null);
       return;
     }
     persistAiDashboardDraft();
@@ -10566,7 +10838,7 @@ if (questionFileInput) {
 
         const selectedImages = validImages.slice(0, remainingSlots);
         const imageDataUrls = await Promise.all(selectedImages.map((file) => optimizeStudyGuidedImage(file)));
-        setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, ...imageDataUrls]);
+        setStudyGuidedUploadPreview([...studyGuidedUploadPreviewDataUrls, ...imageDataUrls], { clearExplanation: false });
         prototypeImportStatusMessage = "";
         if (questionBankStatus) {
           questionBankStatus.hidden = true;
