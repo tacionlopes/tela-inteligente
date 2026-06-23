@@ -6,11 +6,12 @@ const STUDY_GUIDED_FOLLOWUP_INVALID_MESSAGE = "Este conteúdo não corresponde �
 
 const STUDY_GUIDED_SUBJECT_KEYWORD_HINTS = {
   "Português": ["substantivo", "verbo", "adjetivo", "oração", "crase", "pontuação", "concordância", "acentuação", "interpretação", "texto"],
+  "Matemática": ["matemática", "matematica", "números", "numeros", "número", "numero", "números reais", "numeros reais", "número real", "numero real", "conjuntos numéricos", "conjuntos numericos", "números racionais", "numeros racionais", "números irracionais", "numeros irracionais", "irracional", "irracionais", "inteiro", "inteiros", "natural", "naturais", "decimal", "decimais", "dízima", "dizima", "porcento", "porcentagem", "fração", "fracao", "frações", "fracoes", "raiz", "raiz quadrada", "raízes", "raizes", "potência", "potencia", "potências", "potencias", "expoente", "múltiplo", "multiplo", "divisor", "divisores", "equação", "equacao", "equações", "equacoes", "inequação", "inequacao", "álgebra", "algebra", "expressão numérica", "expressao numerica", "geometria", "ângulo", "angulo", "área", "area", "perímetro", "perimetro", "volume", "estatística", "estatistica", "probabilidade", "gráfico", "grafico", "tabela", "razão", "razao", "proporção", "proporcao", "regra de três", "regra de tres", "bhaskara"],
   "História": ["guerra", "império", "colônia", "revolução", "independência", "idade média", "presidente", "ditadura", "civilização", "tratado"],
   "Geografia": ["mapa", "território", "clima", "relevo", "vegetação", "hidrografia", "continente", "população", "urbanização", "paisagem"],
   "Biologia": ["coração", "célula", "corpo humano", "sistema digestório", "respiração", "órgão", "ser vivo", "genética", "ecossistema", "fotossíntese"],
-  "Química": ["átomo", "átomos", "molécula", "moléculas", "elemento químico", "tabela periódica", "reação química", "mistura", "substância", "ligação química"],
-  "Física": ["força", "movimento", "energia", "velocidade", "gravidade", "massa", "aceleração", "eletricidade", "circuito", "ondas"],
+  "Química": ["átomo", "átomos", "molécula", "moléculas", "elemento químico", "tabela periódica", "reação química", "mistura", "substância", "ligação química", "distribuição eletrônica", "distribuicao eletronica", "camada de valência", "camada de valencia", "configuração eletrônica", "configuracao eletronica", "elétrons", "eletrons"],
+  "Física": ["força", "movimento", "energia", "velocidade", "gravidade", "massa", "aceleração", "aceleracao", "eletricidade", "circuito", "ondas", "frequência", "frequencia", "período", "periodo", "hertz", "oscilação", "oscilacao"],
   "Inglês": ["verb to be", "simple present", "simple past", "present continuous", "english", "inglês", "vocabulary", "reading", "listening"],
   "Artes": ["pintura", "escultura", "teatro", "música", "dança", "obra de arte", "artista", "cores", "desenho", "cinema"],
 };
@@ -51,7 +52,7 @@ function getStudyGuidedDisplaySubject(subject) {
   const normalized = normalizePlainText(subject);
 
   if (normalized === normalizePlainText("Ciências")) return "Biologia";
-  if (normalized === normalizePlainText("Matemática")) return "Química";
+  if (normalized === normalizePlainText("Matemática")) return "Matemática";
   if (normalized === normalizePlainText("Lógica")) return "Física";
   if (normalized === normalizePlainText("Historia da Arte")) return "Artes";
 
@@ -82,6 +83,32 @@ function detectStudyGuidedLikelySubjectFromText(rawText) {
     subject: bestScore > 0 ? bestSubject : "",
     score: bestScore,
   };
+}
+
+function countSubjectKeywordMatches(subjectLabel, rawText) {
+  const keywords = STUDY_GUIDED_SUBJECT_KEYWORD_HINTS[String(subjectLabel || "").trim()] || [];
+  const text = normalizePlainText(rawText);
+  if (!text || !keywords.length) return 0;
+
+  return keywords.reduce((total, keyword) => (
+    total + (text.includes(normalizePlainText(keyword)) ? 1 : 0)
+  ), 0);
+}
+
+function hasQuestionContextOverlap(question, request = {}) {
+  const questionTokens = normalizePlainText(question)
+    .split(/\s+/)
+    .filter((token) => token.length >= 4);
+  if (!questionTokens.length) return false;
+
+  const contextText = normalizePlainText([
+    request.knowledgeBase || "",
+    request.explanation?.intro || "",
+    ...(Array.isArray(request.explanation?.steps) ? request.explanation.steps : []),
+  ].join(" "));
+
+  if (!contextText) return false;
+  return questionTokens.some((token) => contextText.includes(token));
 }
 
 function sendJson(response, statusCode, payload) {
@@ -162,13 +189,23 @@ function validateStudyFollowupRequest(request) {
 function validateStudyFollowupCompatibility(request) {
   const selectedSubjectLabel = getStudyGuidedDisplaySubject(request.subjects[0]);
   const question = String(request.question || "").trim();
-
+  const overlapWithCurrentStudy = hasQuestionContextOverlap(question, request);
   const detectedQuestion = detectStudyGuidedLikelySubjectFromText(question);
+  const selectedSubjectScore = countSubjectKeywordMatches(selectedSubjectLabel, question);
+
+  if (selectedSubjectLabel === "Matemática") {
+    return { ok: true, response: null };
+  }
+
+  if (overlapWithCurrentStudy) {
+    return { ok: true, response: null };
+  }
 
   if (
     detectedQuestion.subject
     && detectedQuestion.subject !== selectedSubjectLabel
     && detectedQuestion.score >= 2
+    && selectedSubjectScore === 0
   ) {
     return { ok: false, response: buildInvalidResponse(request) };
   }
@@ -343,6 +380,30 @@ async function handler(request, response) {
 
   try {
     const answer = await callOpenAiGenerateStudyFollowup(studyRequest);
+
+    if (
+      answer?.metadata?.isCompatible === false
+      && getStudyGuidedDisplaySubject(studyRequest.subjects?.[0]) === "Matemática"
+    ) {
+      answer.metadata.isCompatible = true;
+      answer.metadata.incompatibilityMessage = "";
+
+      if (
+        !String(answer.answer || "").trim()
+        || String(answer.answer || "").trim() === STUDY_GUIDED_FOLLOWUP_INVALID_MESSAGE
+      ) {
+        const intro = String(studyRequest?.explanation?.intro || "").trim();
+        const firstStep = Array.isArray(studyRequest?.explanation?.steps)
+          ? String(studyRequest.explanation.steps[0] || "").trim()
+          : "";
+        answer.answer = [
+          "Essa pergunta faz parte do estudo atual de Matemática.",
+          intro,
+          firstStep && firstStep !== intro ? firstStep : "",
+        ].filter(Boolean).join(" ");
+      }
+    }
+
     return sendJson(response, 200, answer);
   } catch (error) {
     console.error("[AI generate study followup] Falha na geracao:", error);
